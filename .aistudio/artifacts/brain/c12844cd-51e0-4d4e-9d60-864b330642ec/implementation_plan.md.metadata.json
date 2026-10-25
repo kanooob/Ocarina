@@ -1,0 +1,6 @@
+{
+  "summary":  "Plan d'implémentation pour le lecteur de webradio en direct sous Jetpack Compose avec Room, lecture en arrière-plan (Foreground Service), reconnexion automatique 5 min, et gestion des stations et URL de changement de musique.",
+  "updatedAt":  "2026-10-25T07:40:42.954088253Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

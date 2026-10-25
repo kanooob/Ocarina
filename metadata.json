@@ -1,0 +1,6 @@
+{
+  "name": "OndeLive",
+  "description": "Lecteur de webradio en direct avec gestion de stations, lecture en arrière-plan et reconnexion automatique.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">OndeLive</string>
+    <string name="channel_name">Live Radio Playback</string>
+    <string name="channel_description">Audio playback controls for live stream</string>
+    <string name="player_live">LIVE</string>
+    <string name="player_buffering">Connecting to stream…</string>
+    <string name="player_reconnecting">Auto-reconnect (max 5 min)…</string>
+    <string name="player_stopped">Ready to stream</string>
+    <string name="player_no_station">No station selected</string>
+    <string name="action_next">Next song</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_settings">Station settings</string>
+    <string name="select_station">Choose station</string>
+    <string name="empty_stations_title">No stations saved</string>
+    <string name="empty_stations_desc">Add your first webradio stream in settings to start listening.</string>
+</resources>
