@@ -10,7 +10,7 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk = 34
+  compileSdk = 35
 
   defaultConfig {
     applicationId = "fr.galaxie.ocarina"
