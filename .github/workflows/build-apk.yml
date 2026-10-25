@@ -18,16 +18,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Build Debug APK
+      - name: Build with Gradle
         run: |
-          # Trouve automatiquement gradlew où qu'il soit, lui donne les droits et lance le build
-          find . -name "gradlew" -exec chmod +x {} \;
-          find . -name "gradlew" -execdir ./gradlew assembleDebug \;
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
 
-      - name: Find and Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: |
-            app/build/outputs/apk/debug/*.apk
-            **/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/app-debug.apk
+            **/build/outputs/apk/debug/app-debug.apk
