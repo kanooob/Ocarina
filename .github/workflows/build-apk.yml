@@ -18,24 +18,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Gradle & Build APK
-        run: |
-          # Installe l'outil Gradle sur le serveur de build s'il n'est pas présent
-          sudo apt-get update && sudo apt-get install -y gradle
-          
-          # Si le fichier gradlew n'existe pas, on le crée automatiquement
-          if [ ! -f "gradlew" ]; then
-            echo "Création du wrapper Gradle manquant..."
-            gradle wrapper
-          fi
-          
-          chmod +x gradlew
-          ./gradlew assembleDebug
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
 
-      - name: Find and Upload APK
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: |
+            app/build/outputs/apk/debug/*.apk
             **/build/outputs/apk/debug/*.apk
-            **/build/outputs/apk/debug/app-debug.apk
