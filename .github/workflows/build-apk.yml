@@ -18,18 +18,18 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Find and Build with Gradle
+      - name: Install Gradle & Build APK
         run: |
-          # Recherche automatique du fichier gradlew dans tout le dépôt
-          GRADLEW_PATH=$(find . -name "gradlew" -type f -print -quit)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "Erreur : Impossible de trouver le fichier gradlew dans le projet."
-            exit 1
+          # Installe l'outil Gradle sur le serveur de build s'il n'est pas présent
+          sudo apt-get update && sudo apt-get install -y gradle
+          
+          # Si le fichier gradlew n'existe pas, on le crée automatiquement
+          if [ ! -f "gradlew" ]; then
+            echo "Création du wrapper Gradle manquant..."
+            gradle wrapper
           fi
-          echo "Fichier gradlew trouvé : $GRADLEW_PATH"
-          chmod +x "$GRADLEW_PATH"
-          DIR=$(dirname "$GRADLEW_PATH")
-          cd "$DIR"
+          
+          chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Find and Upload APK
