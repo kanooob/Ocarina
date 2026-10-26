@@ -1,117 +1,119 @@
-# Lecteur Webradio en Direct (Live Stream Player)
+# Refonte Ocarina : Robustesse Réseau, Artwork Dynamique & Évolutions UI/UX
 
-Une application Android moderne en Jetpack Compose permettant d'écouter des webradios en direct avec persistance locale Room pour gérer les stations, lecture continue en arrière-plan via un service de premier plan, mécanisme de reconnexion automatique intelligent jusqu'à 5 minutes, et déclencheur d'actualisation de morceau via URL personnalisée.
-
-## Décisions Clés & Synthèse des Réponses Utilisateur
+Ce plan détaille la mise en œuvre complète des spécifications d'Ocarina : renforcement du service de lecture audio en arrière-plan, alerte critique après 5 minutes de reconnexion, enrichissement en direct des pochettes d'albums (iTunes/Deezer), gestion du skip et refonte visuelle ergonomique des écrans et modales.
 
 > [!IMPORTANT]
-> Les choix suivants ont été confirmés lors de la phase de cadrage :
-> - **Stations initiales** : Démarrage avec une liste vide prête à accueillir les stations créées par l'utilisateur (avec bouton facile pour ajouter sa première station).
-> - **Bouton Suivant / Passer** : Envoie une requête HTTP à l'URL configurée de la station pour ordonner le changement de morceau côté serveur, puis réinitialise/actualise le flux en direct pour réduire le temps de latence (décalage).
-> - **Style visuel** : Design Material You épuré avec thématique dynamique, formes douces M3, indicateur visuel de direct (Live) et ondes audio animées.
+> ### Décisions Utilisateur Validées (Phase 1)
+> 1. **Alerte d'échec de reconnexion (5 min)** : Notification système persistante avec bouton d'action explicite « Réessayer » couplée à une bannière d'alerte visible dans l'application.
+> 2. **Option de contrôle du flux au skip** : Activée par défaut (« Reconnexion active du flux audio au saut de piste »), configurable via un nouveau paramètre dédié dans l'écran Paramètres.
+> 3. **Résolution des pochettes d'albums (Artwork)** : Récupération automatique en haute définition (600x600 px) pour un affichage net dans le lecteur Compose et la notification système Android MediaStyle.
+> 4. **Identité Visuelle & Logo** : Rebranding total en « Ocarina », intégration du logo officiel fourni (onde audio sage/olive) en icône adaptative de l'application et en visuel central.
 
 ---
 
-## 1. Vue d'Ensemble & Fonctionnalités Clés
+## 1. Vue d'Ensemble & Concept
 
-- **Gestion des stations (Room DB locale)** :
-  - Nom de la station (obligatoire)
-  - URL du flux audio (obligatoire, compatible MP3, AAC, OGG, HLS)
-  - URL de changement de musique (optionnelle/recommandée pour le déclenchement du morceau suivant)
-  - Station active sauvegardée
-- **Écran d'accueil & Lecteur central** :
-  - En haut à gauche : Sélecteur de station compact avec menu déroulant / panneau rapide pour changer instantanément de radio.
-  - En haut à droite : Accès direct aux Paramètres / Gestion de la base de données des stations.
-  - Au centre : Lecteur audio immersif affichant le visualiseur d'ondes sonores en direct, le nom de la radio, le titre de la musique détecté ou en cours de diffusion, les contrôles de lecture (Play/Pause, Recharger le flux) et le bouton **Suivant** (Passer).
-  - Indicateur de statut précis : "En direct", "Mise en mémoire tampon...", "Changement de morceau...", ou "Reconnexion automatique (max 5 min)".
-- **Lecture audio en arrière-plan ininterrompue** :
-  - Implémentée avec un `ForegroundService` Android et notification multimédia interactive (Play, Pause, Suivant, Quitter).
-  - Gestion du focus audio et maintien du verrou de veille (`WAKE_LOCK`).
-- **Résilience & Reconnexion automatique (5 minutes)** :
-  - Si le flux radio s'interrompt (perte de connexion, coupure du serveur de streaming), le lecteur diffuse le silence sans planter et déclenche un cycle de reconnexion périodique avec compte à rebours jusqu'à 5 minutes avant d'abandonner.
-- **Support multi-formats** :
-  - Support natif des flux HTTP/HTTPS en streaming (MPEG Audio / MP3, AAC / M4A, OGG/Opus, HLS stream).
+Ocarina est un lecteur de webradio minimaliste, robuste et moderne pour Android. L'application garantit une continuité de lecture irréprochable face aux aléas réseau et enrichit l'expérience musicale par l'extraction directe des métadonnées de diffusion et la découverte visuelle des albums associés en temps réel.
+
+- **Public cible** : Amateurs de musique et auditeurs de stations webradio indépendantes recherchant un lecteur épuré, réactif, sans publicité ni distractions.
+- **Valeur clé** : Tolérance maximale aux coupures réseau, affichage automatique des titres et pochettes d'albums de haute qualité, et compatibilité totale avec les contrôles système (Android MediaSession, écran de verrouillage, Bluetooth, DLNA).
 
 ---
 
 ## 2. Expérience Utilisateur & Design Visuel
 
-### Parcours Utilisateur
-1. **Premier lancement** : L'écran d'accueil invite chaleureusement l'utilisateur à configurer sa première webradio en cliquant sur "Ajouter une station" ou via l'icône paramètres.
-2. **Configuration en base locale** : Formulaire M3 épuré avec validation (Nom, URL de streaming, URL de changement de morceau). Possibilité de tester l'URL directement.
-3. **Écoute en direct** : Sélection de la station, lancement instantané du flux. Visualiseur dynamique pulsant au rythme de la lecture.
-4. **Passer au morceau suivant** : Pression sur le bouton "Suivant", requête HTTP envoyée à l'URL de changement de morceau configurée, notification visuelle, puis rafraîchissement automatique du flux audio.
-5. **Passage en arrière-plan** : L'utilisateur verrouille l'écran ou quitte l'application ; la musique continue sans accroc et la notification permet de contrôler le lecteur.
+### Parcours Utilisateur Clés
+1. **Écoute & Découverte Visuelle** : Au lancement d'un flux, le titre du morceau est extrait en temps réel du flux Icecast/Shoutcast avec décodage multi-encodage (UTF-8, Latin-1, Windows-1252). Une recherche instantanée interroge l'API iTunes (fallback Deezer) pour charger la pochette en 600x600.
+2. **Saut de morceau (Skip)** : L'auditeur appuie sur le bouton harmonisé « Passer » (ou depuis la notification système). La requête de saut est transmise au serveur de la radio, et selon la préférence utilisateur, le flux audio est réinstancié pour supprimer la latence de tampon.
+3. **Résilience Réseau & Notification Critique** : En cas de perte de flux, le compte à rebours de reconnexion s'active pendant 5 minutes. En cas d'échec final, l'utilisateur reçoit une alerte système avec bouton « Réessayer » et un bandeau clair dans l'app.
+4. **Diffusion Audio (DLNA / UPnP)** : L'icône de diffusion abandonne l'analogie de la télévision pour un pictogramme moderne d'ondes de partage audio, avec une modale fluide présentant un bouton d'actualisation interactif bien détaché.
 
-### Direction Artistique (Material You épuré)
-- **Palette & Couleurs** : Utilisation du Material You dynamique (`dynamicLightColorScheme` / `dynamicDarkColorScheme` sur Android 12+, avec palette de secours saphir/indigo moderne).
-- **Typographie** : Hiérarchie typographique nette (titres clairs, affichage du morceau en évidence avec défilement fluide si texte long).
-- **Animations** : Barres d'égaliseur animées en direct (`Canvas` / `Animatable`), transitions fondues entre états Play et Pause, compte à rebours de reconnexion avec jauge circulaire.
-
----
-
-## 3. Architecture Technique & Flux de Données
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Jetpack Compose UI                       │
-│  ┌───────────────────────┐       ┌───────────────────────┐  │
-│  │     HomeScreen        │       │    SettingsScreen     │  │
-│  │ (Station Selector,    │       │ (Room DB Management,  │  │
-│  │  Live Player, Waves)  │       │  Add/Edit/Delete)     │  │
-│  └───────────┬───────────┘       └───────────┬───────────┘  │
-│              │                               │              │
-│              └───────────────┬───────────────┘              │
-│                              ▼                              │
-│                      RadioViewModel                         │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-            ┌──────────────────┴──────────────────┐
-            ▼                                     ▼
-┌─────────────────────────┐           ┌─────────────────────────┐
-│     Room Database       │           │   RadioPlaybackService  │
-│  - StationEntity        │           │   (Foreground Service)  │
-│  - StationDao           │           │  - MediaPlayer Core     │
-│  - RadioRepository      │           │  - 5-Min Retry Watchdog │
-│                         │           │  - Media Notification   │
-└─────────────────────────┘           └───────────┬─────────────┘
-                                                  │
-                                                  ▼
-                                      ┌─────────────────────────┐
-                                      │ Web Radio HTTP Streams  │
-                                      │ Next-Song Trigger URL   │
-                                      └─────────────────────────┘
-```
-
-### Composants Principaux
-1. **Persistance locale (Room)** :
-   - `RadioStation` : `id`, `name`, `streamUrl`, `changeSongUrl`, `isSelected`, `createdAt`.
-   - `RadioStationDao` : Récupération réactive en `Flow<List<RadioStation>>`, insertions, suppressions, mise à jour de la station sélectionnée.
-2. **Moteur Audio & Service (`RadioPlaybackService`)** :
-   - Service d'arrière-plan avec `startForeground` et notification multimédia.
-   - Gestion d'état réactive exposée via `StateFlow` ou `Broadcast`/`Binder` : `PlaybackState` (Idle, Buffering, Playing, Reconnecting, Error).
-   - Watchdog de reconnexion : réessais progressifs avec timer de 5 minutes max.
-   - Requête asynchrone sur l'URL de changement de musique (`OkHttpClient`) lors de l'appui sur "Suivant", puis reconnexion propre du lecteur.
-3. **Interface Compose** :
-   - `MainActivity` avec Navigation M3 entre le lecteur d'accueil et les paramètres.
-   - Dialogue rapide de changement de station depuis le bouton supérieur gauche.
-   - Visualiseur d'ondes sonores interactif.
+### Direction Artistique & Thème
+- **Aura & Atmosphère** : Tonalité naturelle inspirée du logo officiel (nuances sauge, olive, surfaces neutres chaudes et fond sombre immersif).
+- **Typographie** : Hiérarchie contrastée dans la carte de lecture (« Morceau diffusé » discret en surtitre, titre de chanson en graisse `Bold` et corps 18–20sp).
+- **Régularité & Équilibre** : Alignement strict des boutons d'action inférieurs (bouton rond de rechargement à gauche et bouton d'action à droite équilibrés autour du bouton Play central).
+- **Marges Système & Insets** : Respect des marges supérieures de la barre d'état système (`WindowInsets.statusBars` et padding de sécurité) et élévation du bouton flottant (+) au-dessus de la barre de navigation gestuelle.
 
 ---
 
-## 4. Plan de Réalisation Étape par Étape
+## 3. Décisions Clés & Arbitrages Techniques
 
-1. **Manifest & Permissions** :
-   - Déclarer `INTERNET`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `WAKE_LOCK`, `POST_NOTIFICATIONS`.
-2. **Entités Room & Repository** :
-   - Créer `RadioStation`, `RadioStationDao`, `RadioDatabase` et `RadioRepository`.
-3. **Moteur Audio & Service de lecture en arrière-plan** :
-   - Créer `RadioPlaybackService` avec notification persistante, gestion du cycle de vie audio, boucle de reconnexion automatique (5 min) et gestionnaire de requête du bouton Suivant.
-4. **ViewModel & Couche de données** :
-   - `RadioViewModel` coordonnant l'état de lecture, la liste des stations, la station active et la communication avec le service.
-5. **Composants d'Interface Jetpack Compose** :
-   - Écran principal avec sélecteur de station en haut à gauche, visualiseur d'ondes, lecteur central avec nom du morceau et bouton Suivant.
-   - Écran de paramètres / gestion des stations dans la base de données.
-6. **Synchronisation du projet & Validation** :
-   - Mettre à jour `metadata.json` et `strings.xml`.
-   - Vérifier la compilation sans erreur avec `compile_applet`.
+- **Pipeline d'Artwork sans clé API** :
+  - *Approche retenue* : Appel asynchrone non-bloquant vers iTunes Search API (`https://itunes.apple.com/search?term=...&entity=song&limit=1`), avec extraction du champ `artworkUrl100` surdimensionné en 600x600 (`600x600bb.jpg`), et bascule immédiate vers Deezer API (`https://api.deezer.com/search?q=...&limit=1`) si aucun résultat n'est retourné.
+  - *Gestion du cache* : Mise en cache mémoire et disque via Coil pour éviter toute requête répétitive sur une même chanson.
+  - *Placeholder* : Composant visuel vectoriel arborant le logo officiel Ocarina sur fond dégradé doux lorsque l'API ne retourne aucun visuel.
+- **Nettoyage & Encodage des Métadonnées** :
+  - *Approche retenue* : Décodage binaire intelligent dans `IcyMetadataExtractor` testant séquentiellement UTF-8, Windows-1252 et ISO-8859-1 avec nettoyage des entités HTML (`&amp;`, `&#039;`, `&quot;`) et normalisation des séparateurs (`Artist - Title`).
+- **MediaStyle Notification Android** :
+  - *Approche retenue* : Titre du morceau affiché en titre principal de la notification (station en sous-titre), affichage de l'artwork en grand icône (`setLargeIcon`), et intégration directe des actions Play/Pause et Next.
+
+---
+
+## 4. Architecture Technique & Flux de Données
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                              UI / Compose                              │
+│   ┌─────────────────────────────┐    ┌─────────────────────────────┐   │
+│   │         HomeScreen          │    │       SettingsScreen        │   │
+│   │  • Pillule Ocarina ajustée  │    │  • Card Base de données     │   │
+│   │  • Pochette 600x600 + Logo  │    │  • Option Skip Reconnect    │   │
+│   │  • Titre contrasté          │    │  • Mentions 2026 en footer  │   │
+│   │  • Boutons alignés          │    │  • FAB repositionné         │   │
+│   └──────────────┬──────────────┘    └──────────────┬──────────────┘   │
+└──────────────────┼──────────────────────────────────┼──────────────────┘
+                   ▼                                  ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                             RadioViewModel                             │
+│       • PlayerState (Status, Titre, ArtworkUrl, Erreurs, Skip)         │
+│       • AppPreferences (SkipReloadEnabled, Theme, Language)            │
+└──────────────────┬──────────────────────────────────┬──────────────────┘
+                   │                                  │
+                   ▼                                  ▼
+┌──────────────────────────────────────┐  ┌──────────────────────────────┐
+│        RadioPlaybackService          │  │     ArtworkRepository        │
+│   • ExoPlayer + MediaSession         │  │   • iTunes Search API        │
+│   • Watchdog 5 min + Notification    │  │   • Deezer API (Fallback)    │
+│   • Notification MediaStyle + Art    │  │   • Coil ImageLoader Cache   │
+└──────────────────┬───────────────────┘  └──────────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────┐
+│        IcyMetadataExtractor          │
+│   • Multi-charset (UTF-8, CP1252)    │
+│   • HTML Entities Sanitizer          │
+└──────────────────────────────────────┘
+```
+
+### Plan d'Exécution Détaillé
+1. **Rebranding & Ressources Fondamentales** :
+   - Mise à jour de `app_name` dans `strings.xml`, `metadata.json`, `settings.gradle.kts`.
+   - Création de l'icône adaptative Ocarina à partir du fichier visuel officiel.
+   - Ajout des chaînes de caractères (FR/EN) pour l'option de skip, l'alerte de coupure 5 minutes et le copyright 2026.
+2. **Couche Données & Préférences** :
+   - Ajout du paramètre `skipStreamReload` dans `AppPreferences` (valeur par défaut : true).
+   - Création du service d'enrichissement d'artwork `ArtworkRepository` (iTunes + Deezer fallback) avec cache mémoire.
+3. **Moteur Audio & Robustesse (MediaSessionService)** :
+   - Amélioration de `IcyMetadataExtractor` pour la gestion des caractères accentués et encodages exotiques.
+   - Intégration du déclenchement d'artwork dès la réception du titre.
+   - Mise à jour de la notification Android MediaStyle : affichage prioritaire du morceau, grand icône d'artwork, bouton Passer.
+   - Ajout de l'alerte d'échec critique après 5 minutes de reconnexion infructueuse avec bouton « Réessayer ».
+   - Prise en compte du paramètre `skipStreamReload` dans `triggerNextSong()`.
+4. **Refonte Écran Principal (HomeScreen)** :
+   - Marge de sécurité haute pour la barre d'état.
+   - Allègement esthétique de la pilule Ocarina.
+   - Affichage de la pochette d'album dynamique avec fondu et fallback sur le logo Ocarina.
+   - Renforcement du contraste visuel du bloc « Morceau diffusé ».
+   - Harmonisation symétrique des commandes de lecture (bouton Actualiser circulaire à gauche, bouton Passer assorti à droite).
+5. **Ajustements Écran des Paramètres (SettingsScreen)** :
+   - Espacement sous « Lecteur système & Matériel connecté ».
+   - Intégration du titre de la section stations dans une carte arrondie cohérente.
+   - Ajout du toggle pour le rechargement du flux au skip.
+   - Mention « Ocarina © 2026 » en bas de page.
+   - Décalage vers le haut du bouton flottant (+).
+6. **Composants Modaux (Bottom Sheets & Dialogs)** :
+   - *Choisir une station* : URLs enveloppées (pas de coupure abrupte), meilleur contraste, bouton « + Gérer » espacé et stylisé.
+   - *Diffuser (DLNA / UPnP)* : Pictogramme de streaming audio, correction de la troncature de l'anneau de chargement, vrai bouton cliquable « Actualiser la recherche », marges aérées.
+   - *Ajouter une station* : Marges intérieures accrues, espacement du libellé sous « Suivant », ordonnancement clair des boutons (Fermer, Tester le flux en contour, Enregistrer en plein).
+7. **Vérification & Compilation** :
+   - Validation complète du build avec `compile_applet`.

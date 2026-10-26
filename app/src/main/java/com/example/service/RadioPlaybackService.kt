@@ -56,6 +56,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private var reconnectJob: Job? = null
     private var metadataJob: Job? = null
     private var nextSongJob: Job? = null
+    private var artworkJob: Job? = null
+    private var currentArtworkBitmap: android.graphics.Bitmap? = null
     private var hasPlayedSuccessfully = false
     private var activeStreamUrl: String? = null
 
@@ -84,7 +86,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
         // Enable Icecast and Shoutcast metadata parsing in ExoPlayer HTTP requests
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("OndeLive/1.0 (Android; VLC Compatible)")
+            .setUserAgent("Ocarina/1.0 (Android; VLC Compatible)")
             .setDefaultRequestProperties(mapOf("Icy-MetaData" to "1"))
             .setConnectTimeoutMs(8000)
             .setReadTimeoutMs(10000)
@@ -205,6 +207,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     fun playStation(station: RadioStation) {
         cancelReconnect()
         cancelMetadataPolling()
+        artworkJob?.cancel()
+        currentArtworkBitmap = null
         hasPlayedSuccessfully = false
 
         val rawUrl = station.streamUrl.trim()
@@ -249,6 +253,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     currentStation = effectiveStation,
                     status = PlaybackStatus.NoNetwork,
                     currentTrackTitle = "",
+                    artworkUrl = null,
+                    reconnectFailed = false,
                     message = "Aucune connexion Internet. Diffusion mise en attente du réseau."
                 )
             }
@@ -261,6 +267,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 currentStation = effectiveStation,
                 status = PlaybackStatus.Buffering,
                 currentTrackTitle = "",
+                artworkUrl = null,
+                reconnectFailed = false,
                 message = null
             )
         }
@@ -388,35 +396,62 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     }
 
     private fun updateTrackTitle(title: String) {
-        val cleanTitle = title.trim()
+        val cleanTitle = IcyMetadataExtractor.sanitizeTitle(title)
         if (cleanTitle.isBlank() || cleanTitle == _playerState.value.currentTrackTitle) return
 
         _playerState.update { it.copy(currentTrackTitle = cleanTitle) }
 
-        // Update MediaSession system notification with real song title from Icecast
         val stationName = _playerState.value.currentStation?.name ?: getString(R.string.app_name)
-        val updatedMetadata = MediaMetadata.Builder()
+        val initialMetadata = MediaMetadata.Builder()
             .setTitle(cleanTitle)
             .setDisplayTitle(cleanTitle)
             .setArtist(stationName)
             .setStation(stationName)
             .build()
-        exoPlayer?.playlistMetadata = updatedMetadata
+        exoPlayer?.playlistMetadata = initialMetadata
         updateForegroundNotification()
+
+        // Fetch album artwork asynchronously
+        artworkJob?.cancel()
+        artworkJob = serviceScope.launch {
+            val artUrl = ArtworkRepository.findArtworkUrl(cleanTitle)
+            _playerState.update { it.copy(artworkUrl = artUrl) }
+
+            if (!artUrl.isNullOrBlank()) {
+                val bitmap = ArtworkRepository.fetchArtworkBitmap(artUrl)
+                currentArtworkBitmap = bitmap
+                val updatedMetadata = MediaMetadata.Builder()
+                    .setTitle(cleanTitle)
+                    .setDisplayTitle(cleanTitle)
+                    .setArtist(stationName)
+                    .setStation(stationName)
+                    .setArtworkUri(Uri.parse(artUrl))
+                    .build()
+                exoPlayer?.playlistMetadata = updatedMetadata
+                updateForegroundNotification()
+            }
+        }
     }
 
     private fun updateForegroundNotification() {
         val session = mediaSession ?: return
         val state = _playerState.value
         val stationName = state.currentStation?.name ?: getString(R.string.app_name)
-        val trackText = when {
-            state.currentTrackTitle.isNotBlank() -> state.currentTrackTitle
+
+        val statusText = when {
             state.status is PlaybackStatus.NoNetwork -> "Hors ligne - En attente du réseau…"
             state.status is PlaybackStatus.Reconnecting -> "Reconnexion auto… (${(state.status as PlaybackStatus.Reconnecting).secondsLeft}s)"
             state.status is PlaybackStatus.Buffering -> "Connexion au flux en direct…"
             state.status is PlaybackStatus.Playing -> "Diffusion en direct"
             state.status is PlaybackStatus.Paused -> "En pause"
             else -> "Prêt à diffuser"
+        }
+
+        // Priority rule: Show track title first. Fall back to station name only when track is missing
+        val (notificationTitle, notificationText) = if (state.currentTrackTitle.isNotBlank()) {
+            Pair(state.currentTrackTitle, stationName)
+        } else {
+            Pair(stationName, statusText)
         }
 
         val sessionActivityIntent = Intent(this, MainActivity::class.java).apply {
@@ -427,16 +462,53 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, RadioApp.NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(stationName)
-            .setContentText(trackText)
-            .setSubText("Webradio en direct")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setStyle(MediaStyleNotificationHelper.MediaStyle(session))
+        // Actions: Toggle (Play/Pause) + Next (Skip)
+        val isPlaying = state.status is PlaybackStatus.Playing
+        val toggleIntent = Intent(this, RadioPlaybackService::class.java).apply { action = ACTION_TOGGLE }
+        val togglePendingIntent = PendingIntent.getService(
+            this, 101, toggleIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val nextIntent = Intent(this, RadioPlaybackService::class.java).apply { action = ACTION_NEXT }
+        val nextPendingIntent = PendingIntent.getService(
+            this, 102, nextIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(this, RadioApp.NOTIFICATION_CHANNEL_ID)
+            .setContentTitle(notificationTitle)
+            .setContentText(notificationText)
+            .setSubText(if (state.currentTrackTitle.isNotBlank()) statusText else "Ocarina • Webradio")
+            .setSmallIcon(R.drawable.ic_ocarina_logo)
+            .setStyle(
+                MediaStyleNotificationHelper.MediaStyle(session)
+                    .setShowActionsInCompactView(0, 1)
+            )
             .setContentIntent(sessionActivityPendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOngoing(state.status is PlaybackStatus.Playing || state.status is PlaybackStatus.Buffering || state.status is PlaybackStatus.Reconnecting || state.status is PlaybackStatus.NoNetwork)
-            .build()
+            .setOngoing(
+                state.status is PlaybackStatus.Playing ||
+                state.status is PlaybackStatus.Buffering ||
+                state.status is PlaybackStatus.Reconnecting ||
+                state.status is PlaybackStatus.NoNetwork
+            )
+            .addAction(
+                if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                if (isPlaying) "Pause" else "Lecture",
+                togglePendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_media_next,
+                "Passer",
+                nextPendingIntent
+            )
+
+        currentArtworkBitmap?.let {
+            builder.setLargeIcon(it)
+        }
+
+        val notification = builder.build()
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -694,12 +766,49 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 _playerState.update {
                     it.copy(
                         status = PlaybackStatus.Error("Délai de reconnexion automatique dépassé (5 min)"),
-                        message = "La station n'a pas pu être reconnectée après 5 minutes."
+                        message = "La station n'a pas pu être reconnectée après 5 minutes.",
+                        reconnectFailed = true
                     )
                 }
                 updateForegroundNotification()
+                showReconnectFailedAlertNotification(station)
             }
         }
+    }
+
+    private fun showReconnectFailedAlertNotification(station: RadioStation) {
+        val retryIntent = Intent(this, RadioPlaybackService::class.java).apply {
+            action = ACTION_PLAY_STATION
+            putExtra(EXTRA_STATION_ID, station.id)
+            putExtra(EXTRA_STATION_NAME, station.name)
+            putExtra(EXTRA_STATION_STREAM_URL, station.streamUrl)
+            putExtra(EXTRA_STATION_CHANGE_SONG_URL, station.changeSongUrl)
+        }
+        val retryPendingIntent = PendingIntent.getService(
+            this, 201, retryIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val sessionActivityIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            this, 202, sessionActivityIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val alertNotification = NotificationCompat.Builder(this, RadioApp.ALERT_CHANNEL_ID)
+            .setContentTitle(getString(R.string.reconnect_failed_title))
+            .setContentText("${station.name} : ${getString(R.string.reconnect_failed_desc)}")
+            .setSmallIcon(R.drawable.ic_ocarina_logo)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(contentPendingIntent)
+            .addAction(android.R.drawable.ic_media_play, getString(R.string.action_retry), retryPendingIntent)
+            .build()
+
+        val notificationManager = getSystemService(android.app.NotificationManager::class.java)
+        notificationManager?.notify(RadioApp.ALERT_NOTIFICATION_ID, alertNotification)
     }
 
     private fun cancelReconnect() {
@@ -725,7 +834,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     if (effectiveChange != null) {
                         val request = Request.Builder()
                             .url(effectiveChange)
-                            .header("User-Agent", "OndeLive/1.0")
+                            .header("User-Agent", "Ocarina/1.0")
                             .build()
 
                         withContext(Dispatchers.IO) {
@@ -739,17 +848,29 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 }
             }
 
-            // Immediately reload the audio stream to cut buffer lag and refresh to the new song
-            delay(400)
-            val resolvedUrl = StreamUrlResolver.resolveStreamUrl(currentStation.streamUrl)
-            prepareAndPlayExoPlayer(resolvedUrl, currentStation.name)
-            _playerState.update { it.copy(isChangingSong = false, message = "Morceau actualisé") }
+            // Respect user preference for active stream reload on skip
+            val shouldReloadStream = com.example.data.AppPreferences.getInstance(this@RadioPlaybackService).skipStreamReload.value
+            if (shouldReloadStream) {
+                // Immediately reload the audio stream to cut buffer lag and refresh to the new song
+                delay(400)
+                val resolvedUrl = StreamUrlResolver.resolveStreamUrl(currentStation.streamUrl)
+                prepareAndPlayExoPlayer(resolvedUrl, currentStation.name)
+                _playerState.update { it.copy(isChangingSong = false, message = "Morceau actualisé") }
 
-            // Poll metadata again
-            delay(1500)
-            val updatedTitle = IcyMetadataExtractor.fetchCurrentTrackTitle(resolvedUrl)
-            if (!updatedTitle.isNullOrBlank()) {
-                updateTrackTitle(updatedTitle)
+                // Poll metadata again
+                delay(1500)
+                val updatedTitle = IcyMetadataExtractor.fetchCurrentTrackTitle(resolvedUrl)
+                if (!updatedTitle.isNullOrBlank()) {
+                    updateTrackTitle(updatedTitle)
+                }
+            } else {
+                _playerState.update { it.copy(isChangingSong = false, message = "Morceau suivant demandé") }
+                delay(2000)
+                val currentUrl = activeStreamUrl ?: currentStation.streamUrl
+                val updatedTitle = IcyMetadataExtractor.fetchCurrentTrackTitle(currentUrl)
+                if (!updatedTitle.isNullOrBlank()) {
+                    updateTrackTitle(updatedTitle)
+                }
             }
         }
     }
@@ -825,6 +946,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         cancelReconnect()
         cancelMetadataPolling()
         nextSongJob?.cancel()
+        artworkJob?.cancel()
+        currentArtworkBitmap = null
         exoPlayer?.stop()
         exoPlayer?.clearMediaItems()
 
@@ -832,6 +955,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             it.copy(
                 status = PlaybackStatus.Idle,
                 currentTrackTitle = "",
+                artworkUrl = null,
                 message = null
             )
         }
@@ -849,6 +973,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         cancelReconnect()
         cancelMetadataPolling()
         nextSongJob?.cancel()
+        artworkJob?.cancel()
+        currentArtworkBitmap = null
         networkMonitor.stopMonitoring()
 
         mediaSession?.run {

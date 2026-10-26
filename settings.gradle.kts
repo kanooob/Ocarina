@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "OndeLive"
+rootProject.name = "Ocarina"
 
 include(":app")

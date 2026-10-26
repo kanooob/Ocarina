@@ -39,7 +39,7 @@ object StreamUrlResolver {
             try {
                 val request = Request.Builder()
                     .url(cleanUrl)
-                    .header("User-Agent", "OndeLive/1.0 (VLC Compatible)")
+                    .header("User-Agent", "Ocarina/1.0 (VLC Compatible)")
                     .build()
 
                 client.newCall(request).execute().use { response ->

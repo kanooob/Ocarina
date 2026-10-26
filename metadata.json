@@ -1,6 +1,6 @@
 {
-  "name": "OndeLive",
-  "description": "Lecteur de webradio en direct avec gestion de stations, lecture en arrière-plan et reconnexion automatique.",
+  "name": "Ocarina",
+  "description": "Lecteur de webradio Ocarina avec streaming direct, métadonnées enrichies, pochettes en temps réel et reconnexion automatique.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

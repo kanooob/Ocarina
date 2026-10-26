@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -51,6 +52,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -68,6 +70,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AppLanguage
 import com.example.data.RadioStation
@@ -90,6 +93,7 @@ fun SettingsScreen(
     val selectedStation by viewModel.selectedStation.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
+    val skipStreamReload by viewModel.skipStreamReload.collectAsStateWithLifecycle()
 
     var showEditDialog by remember { mutableStateOf(false) }
     var stationToEdit by remember { mutableStateOf<RadioStation?>(null) }
@@ -124,6 +128,7 @@ fun SettingsScreen(
             )
         },
         floatingActionButton = {
+            // Bouton d'ajout flottant surélevé pour éviter les conflits gestuels avec la barre système
             FloatingActionButton(
                 onClick = {
                     stationToEdit = null
@@ -131,7 +136,9 @@ fun SettingsScreen(
                 },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.testTag("fab_add_station")
+                modifier = Modifier
+                    .padding(bottom = 24.dp, end = 4.dp)
+                    .testTag("fab_add_station")
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
@@ -147,7 +154,7 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Section 1: Thème d'affichage (clean non-distorted options)
+            // Section 1: Thème d'affichage
             item {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -202,7 +209,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 2: Langue de l'application (clean non-distorted options)
+            // Section 2: Langue de l'application
             item {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -257,7 +264,62 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 3: Information Système
+            // Section 3: Contrôle du flux au skip (Nouveau paramètre)
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = strings.skipControlTitle,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+
+                            Switch(
+                                checked = skipStreamReload,
+                                onCheckedChange = { viewModel.setSkipStreamReload(it) },
+                                modifier = Modifier.testTag("skip_reload_switch")
+                            )
+                        }
+
+                        Text(
+                            text = strings.skipControlDesc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+
+            // Section 4: Information Système (Lecteur système & Matériel connecté)
             item {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -295,26 +357,67 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 4: En-tête Base de données locale
+            // Espacement vertical aéré sous le bloc Lecteur système & Matériel connecté
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+            // Section 5: Titre de la Base de données locale dans un conteneur arrondi cohérent
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column {
-                        Text(
-                            text = "${strings.stationsManagement} (${stations.size})",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = strings.stationsManagementDesc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Radio,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = strings.stationsManagement,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            text = "${stations.size}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = strings.stationsManagementDesc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -375,13 +478,26 @@ fun SettingsScreen(
                 }
             }
 
+            // Pied de page : Mention de l'année 2026
             item {
-                Spacer(modifier = Modifier.height(80.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = strings.footerCopyright,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(70.dp))
             }
         }
     }
 
-    // Modal dialogue pour ajouter / modifier une station
+    // Modal dialogue pour ajouter / modifier une station (ergonomie aérée, hiérarchie de boutons nette)
     if (showEditDialog) {
         StationEditDialog(
             existingStation = stationToEdit,
@@ -401,30 +517,47 @@ fun SettingsScreen(
                     )
                     viewModel.updateStation(updated)
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Station modifiée")
+                        snackbarHostState.showSnackbar("Station '$name' mise à jour")
                     }
                 }
                 showEditDialog = false
             },
-            onTestStream = { url -> viewModel.testStreamUrl(url) }
+            onTestStream = { testUrl ->
+                viewModel.testStreamUrl(testUrl)
+            }
         )
     }
 
     // Dialogue de confirmation de suppression
-    if (stationToDelete != null) {
+    stationToDelete?.let { station ->
         AlertDialog(
             onDismissRequest = { stationToDelete = null },
-            title = { Text(strings.deleteStationConfirmTitle) },
-            text = { Text(String.format(strings.deleteStationConfirmMsg, stationToDelete?.name)) },
+            title = {
+                Text(
+                    text = strings.deleteStationConfirmTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = String.format(strings.deleteStationConfirmMsg, station.name),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
             confirmButton = {
                 Button(
                     onClick = {
-                        stationToDelete?.let { viewModel.deleteStation(it) }
+                        viewModel.deleteStation(station)
                         stationToDelete = null
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar(strings.deleteStation)
+                            snackbarHostState.showSnackbar("Station '${station.name}' supprimée")
                         }
-                    }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
                 ) {
                     Text(strings.delete)
                 }
@@ -439,7 +572,7 @@ fun SettingsScreen(
 }
 
 @Composable
-fun SelectableOptionRow(
+private fun SelectableOptionRow(
     title: String,
     icon: ImageVector,
     isSelected: Boolean,
@@ -588,7 +721,7 @@ fun StationItemCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // URL du flux
+            // URL du flux affichée avec bon contraste et sans coupure
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Link,
@@ -601,12 +734,11 @@ fun StationItemCard(
                     text = station.streamUrl,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // URL de changement de musique
             if (station.changeSongUrl.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -618,9 +750,9 @@ fun StationItemCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Suivant : ${station.changeSongUrl}",
+                        text = station.changeSongUrl,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -679,16 +811,34 @@ fun StationEditDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = if (existingStation == null) strings.addStation else strings.editStation,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (existingStation == null) strings.addStation else strings.editStation,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = strings.cancel,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Nom de la station (Obligatoire)
                 OutlinedTextField(
@@ -731,22 +881,27 @@ fun StationEditDialog(
                         .testTag("stream_url_input")
                 )
 
-                // URL pour changer de musique
-                OutlinedTextField(
-                    value = changeSongUrl,
-                    onValueChange = { changeSongUrl = it },
-                    label = { Text(strings.changeSongUrlLabel) },
-                    placeholder = { Text(strings.changeSongUrlPlaceholder) },
-                    singleLine = true,
-                    supportingText = {
-                        Text(strings.changeSongUrlHint)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("change_song_url_input")
-                )
+                // URL pour changer de musique avec espacement sous le champ
+                Column {
+                    OutlinedTextField(
+                        value = changeSongUrl,
+                        onValueChange = { changeSongUrl = it },
+                        label = { Text(strings.changeSongUrlLabel) },
+                        placeholder = { Text(strings.changeSongUrlPlaceholder) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("change_song_url_input")
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = strings.changeSongUrlHint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-                // Bouton Tester le flux
+                // Bouton secondaire de test avec contour
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -799,6 +954,7 @@ fun StationEditDialog(
             }
         },
         confirmButton = {
+            // Bouton principal d'action plein
             Button(
                 onClick = {
                     val trimmedName = name.trim()

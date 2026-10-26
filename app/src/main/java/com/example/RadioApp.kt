@@ -24,18 +24,29 @@ class RadioApp : Application() {
             val name = getString(R.string.channel_name)
             val descriptionText = getString(R.string.channel_description)
             val importance = NotificationManager.IMPORTANCE_LOW
-            val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
+            val playbackChannel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
                 description = descriptionText
                 setShowBadge(false)
                 setSound(null, null)
             }
+
+            val alertName = getString(R.string.channel_alert_name)
+            val alertDesc = getString(R.string.channel_alert_description)
+            val alertChannel = NotificationChannel(ALERT_CHANNEL_ID, alertName, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = alertDesc
+                enableVibration(true)
+            }
+
             val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
+            notificationManager?.createNotificationChannel(playbackChannel)
+            notificationManager?.createNotificationChannel(alertChannel)
         }
     }
 
     companion object {
         const val NOTIFICATION_CHANNEL_ID = "radio_playback_channel"
+        const val ALERT_CHANNEL_ID = "radio_alert_channel"
         const val NOTIFICATION_ID = 1001
+        const val ALERT_NOTIFICATION_ID = 1002
     }
 }

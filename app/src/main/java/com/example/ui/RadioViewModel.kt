@@ -59,6 +59,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
     val themeMode: StateFlow<ThemeMode> = preferences.themeMode
     val language: StateFlow<AppLanguage> = preferences.language
+    val skipStreamReload: StateFlow<Boolean> = preferences.skipStreamReload
 
     init {
         // Automatically sync launcher app shortcuts whenever stations are modified
@@ -75,6 +76,10 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setLanguage(lang: AppLanguage) {
         preferences.setLanguage(lang)
+    }
+
+    fun setSkipStreamReload(enabled: Boolean) {
+        preferences.setSkipStreamReload(enabled)
     }
 
     fun addStation(name: String, streamUrl: String, changeSongUrl: String, onResult: (Long) -> Unit = {}) {
@@ -190,7 +195,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
             val request = Request.Builder()
                 .url(resolved)
-                .header("User-Agent", "OndeLive/1.0 (VLC Compatible)")
+                .header("User-Agent", "Ocarina/1.0 (VLC Compatible)")
                 .build()
 
             client.newCall(request).execute().use { response ->

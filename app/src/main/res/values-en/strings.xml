@@ -1,7 +1,12 @@
 <resources>
-    <string name="app_name">OndeLive</string>
+    <string name="app_name">Ocarina</string>
     <string name="channel_name">Live Radio Playback</string>
     <string name="channel_description">Audio playback controls for live stream</string>
+    <string name="channel_alert_name">Broadcast Alerts</string>
+    <string name="channel_alert_description">Critical alerts when stream reconnection fails</string>
+    <string name="reconnect_failed_title">Reconnection Failed</string>
+    <string name="reconnect_failed_desc">The station could not be reached after 5 minutes.</string>
+    <string name="action_retry">Retry</string>
     <string name="player_live">LIVE</string>
     <string name="player_buffering">Connecting to stream…</string>
     <string name="player_reconnecting">Auto-reconnect (max 5 min)…</string>

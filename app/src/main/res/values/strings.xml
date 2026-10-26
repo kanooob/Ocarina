@@ -1,7 +1,12 @@
 <resources>
-    <string name="app_name">OndeLive</string>
+    <string name="app_name">Ocarina</string>
     <string name="channel_name">Lecture Webradio</string>
     <string name="channel_description">Contrôles de lecture audio pour le flux webradio en direct</string>
+    <string name="channel_alert_name">Alertes de diffusion</string>
+    <string name="channel_alert_description">Notifications critiques en cas d\'échec de reconnexion</string>
+    <string name="reconnect_failed_title">Échec de reconnexion</string>
+    <string name="reconnect_failed_desc">La station n\'a pas pu être reconnectée après 5 minutes.</string>
+    <string name="action_retry">Réessayer</string>
     <string name="player_live">EN DIRECT</string>
     <string name="player_buffering">Connexion au flux…</string>
     <string name="player_reconnecting">Reconnexion auto (max 5 min)…</string>

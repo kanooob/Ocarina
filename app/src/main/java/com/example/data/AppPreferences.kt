@@ -28,6 +28,9 @@ class AppPreferences(context: Context) {
     private val _language = MutableStateFlow(loadLanguage())
     val language: StateFlow<AppLanguage> = _language.asStateFlow()
 
+    private val _skipStreamReload = MutableStateFlow(loadSkipStreamReload())
+    val skipStreamReload: StateFlow<Boolean> = _skipStreamReload.asStateFlow()
+
     private fun loadThemeMode(): ThemeMode {
         val name = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
         return try {
@@ -46,6 +49,10 @@ class AppPreferences(context: Context) {
         }
     }
 
+    private fun loadSkipStreamReload(): Boolean {
+        return prefs.getBoolean(KEY_SKIP_STREAM_RELOAD, true)
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
         _themeMode.value = mode
@@ -56,9 +63,15 @@ class AppPreferences(context: Context) {
         _language.value = lang
     }
 
+    fun setSkipStreamReload(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SKIP_STREAM_RELOAD, enabled).apply()
+        _skipStreamReload.value = enabled
+    }
+
     companion object {
         private const val KEY_THEME_MODE = "key_theme_mode"
         private const val KEY_LANGUAGE = "key_language"
+        private const val KEY_SKIP_STREAM_RELOAD = "key_skip_stream_reload"
 
         @Volatile
         private var INSTANCE: AppPreferences? = null

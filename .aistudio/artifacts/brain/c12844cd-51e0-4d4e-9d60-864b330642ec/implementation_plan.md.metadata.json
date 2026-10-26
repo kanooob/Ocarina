@@ -1,6 +1,6 @@
 {
-  "summary":  "Plan d'implémentation pour le lecteur de webradio en direct sous Jetpack Compose avec Room, lecture en arrière-plan (Foreground Service), reconnexion automatique 5 min, et gestion des stations et URL de changement de musique.",
-  "updatedAt":  "2026-10-25T07:40:42.954088253Z",
+  "summary":  "Plan d'implémentation pour la refonte Ocarina couvrant la robustesse MediaSession, l'alerte d'échec de reconnexion après 5 minutes, le contrôle de flux au skip, l'enrichissement dynamique d'artwork (iTunes/Deezer en 600x600), le rebranding complet Ocarina et les correctifs ergonomiques UI/UX.",
+  "updatedAt":  "2026-10-26T07:08:07.949775975Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

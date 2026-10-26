@@ -3,11 +3,14 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,33 +18,31 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.Cast
-import androidx.compose.material.icons.filled.CastConnected
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Speaker
-import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.SpeakerGroup
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
-import com.example.dlna.DlnaDevice
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -70,13 +71,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.RadioStation
 import com.example.service.PlaybackStatus
 import com.example.ui.LocalAppStrings
@@ -128,54 +134,58 @@ fun HomeScreen(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
+            // Marge de sécurité haute pour la barre d'état (prévention superposition horloge/batterie)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Petit bouton épuré en haut à gauche avec le nom de la station
+                // Capsule flottante Ocarina épurée et allégée
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    tonalElevation = 1.dp,
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    ),
                     modifier = Modifier
                         .testTag("station_selector_button")
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(24.dp))
                         .clickable { showStationSelectorSheet = true }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Radio,
-                            contentDescription = strings.chooseStation,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(18.dp)
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_ocarina_logo),
+                            contentDescription = "Ocarina",
+                            modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = activeStation?.name ?: strings.chooseStation,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(max = 160.dp)
+                            modifier = Modifier.widthIn(max = 145.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = strings.chooseStation,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(18.dp)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
 
-                // Actions en haut à droite: Bouton Cast (DLNA) et Paramètres
+                // Actions en haut à droite: Pictogramme explicite de streaming audio (DLNA) et Paramètres
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = {
@@ -185,7 +195,7 @@ fun HomeScreen(
                         modifier = Modifier.testTag("dlna_cast_button")
                     ) {
                         Icon(
-                            imageVector = if (isDlnaCasting) Icons.Default.CastConnected else Icons.Default.Cast,
+                            imageVector = Icons.Default.SpeakerGroup,
                             contentDescription = strings.cast,
                             tint = if (isDlnaCasting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
@@ -209,7 +219,7 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -219,25 +229,25 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             } else {
-                // Carte centrale épurée du lecteur
+                // Carte centrale épurée du lecteur Ocarina
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f, fill = false),
                     shape = RoundedCornerShape(32.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                     ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
+                            .padding(horizontal = 20.dp, vertical = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Badge LIVE discret + Indicateur DLNA Cast si actif
+                        // Badge LIVE discret + Indicateur DLNA Stream si actif
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -247,7 +257,7 @@ fun HomeScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .padding(horizontal = 12.dp, vertical = 5.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -280,17 +290,17 @@ fun HomeScreen(
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.CastConnected,
+                                            imageVector = Icons.Default.SpeakerGroup,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = activeDlnaDevice?.name ?: "DLNA",
+                                            text = activeDlnaDevice?.name ?: "DLNA Audio",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -306,7 +316,7 @@ fun HomeScreen(
                         // Nom de la station
                         Text(
                             text = activeStation?.name ?: strings.noStationAvailable,
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
@@ -314,10 +324,54 @@ fun HomeScreen(
                             overflow = TextOverflow.Ellipsis
                         )
 
+                        // Pochette d'album dynamique (Haute Définition 600x600 ou Placeholder neutre Ocarina)
+                        Box(
+                            modifier = Modifier
+                                .size(180.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                                    RoundedCornerShape(24.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!playerState.artworkUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = playerState.artworkUrl,
+                                    contentDescription = playerState.currentTrackTitle.ifBlank { "Pochette de l'album" },
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.radialGradient(
+                                                colors = listOf(
+                                                    MaterialTheme.colorScheme.surfaceVariant,
+                                                    MaterialTheme.colorScheme.surface
+                                                )
+                                            )
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_ocarina_logo),
+                                        contentDescription = "Ocarina",
+                                        modifier = Modifier.size(80.dp),
+                                        alpha = 0.85f
+                                    )
+                                }
+                            }
+                        }
+
                         val isPlaying = playerState.status is PlaybackStatus.Playing
                         val isBuffering = playerState.status is PlaybackStatus.Buffering || playerState.isChangingSong
 
-                        // Titre du morceau lu en direct (Icecast ICY Metadata en évidence)
+                        // Bloc "Morceau diffusé" avec hiérarchie et contraste renforcés
                         Surface(
                             shape = RoundedCornerShape(20.dp),
                             color = MaterialTheme.colorScheme.surface,
@@ -336,14 +390,14 @@ fun HomeScreen(
                                         imageVector = Icons.Default.MusicNote,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = strings.currentTrack,
-                                        style = MaterialTheme.typography.labelSmall,
+                                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp),
                                         color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.ExtraBold
                                     )
                                 }
 
@@ -359,10 +413,11 @@ fun HomeScreen(
 
                                 Text(
                                     text = displayedTrackText,
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontSize = if (playerState.currentTrackTitle.isNotBlank()) 18.sp else 16.sp
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontSize = if (playerState.currentTrackTitle.isNotBlank()) 20.sp else 16.sp,
+                                        lineHeight = 26.sp
                                     ),
-                                    fontWeight = if (playerState.currentTrackTitle.isNotBlank()) FontWeight.Bold else FontWeight.Medium,
+                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     textAlign = TextAlign.Center,
                                     maxLines = 2,
@@ -371,16 +426,73 @@ fun HomeScreen(
                             }
                         }
 
-                        // Visualiseur d'ondes sonores (animation dynamique sous le titre en cours de lecture)
+                        // Visualiseur d'ondes sonores (animation dynamique sous le titre)
                         SoundWaveVisualizer(
                             isPlaying = isPlaying,
                             isBuffering = isBuffering,
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
 
-                        // Statut de reconnexion auto (5 min) si coupure
+                        // Alerte explicite si la reconnexion automatique a échoué après le délai critique de 5 minutes
                         AnimatedVisibility(
-                            visible = playerState.status is PlaybackStatus.Reconnecting,
+                            visible = playerState.reconnectFailed,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = "Échec de reconnexion (5 min)",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = strings.reconnectAlertBanner,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Button(
+                                        onClick = { activeStation?.let { viewModel.selectAndPlayStation(it) } },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            contentColor = MaterialTheme.colorScheme.onError
+                                        ),
+                                        modifier = Modifier.height(34.dp)
+                                    ) {
+                                        Text(strings.retry, style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Statut de reconnexion auto en cours
+                        AnimatedVisibility(
+                            visible = playerState.status is PlaybackStatus.Reconnecting && !playerState.reconnectFailed,
                             enter = fadeIn(),
                             exit = fadeOut()
                         ) {
@@ -459,18 +571,15 @@ fun HomeScreen(
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                         modifier = Modifier.height(34.dp)
                                     ) {
-                                        Text(
-                                            text = strings.retry,
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
+                                        Text(text = strings.retry, style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
                             }
                         }
 
-                        // Message d'erreur s'il y a lieu avec bouton de réessai
+                        // Message d'erreur
                         AnimatedVisibility(
-                            visible = playerState.status is PlaybackStatus.Error,
+                            visible = playerState.status is PlaybackStatus.Error && !playerState.reconnectFailed,
                             enter = fadeIn(),
                             exit = fadeOut()
                         ) {
@@ -521,38 +630,44 @@ fun HomeScreen(
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                         modifier = Modifier.height(34.dp)
                                     ) {
-                                        Text(
-                                            text = strings.retry,
-                                            style = MaterialTheme.typography.labelSmall
-                                        )
+                                        Text(text = strings.retry, style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
                             }
                         }
 
-                        // Contrôles de lecture simples et intuitifs
+                        // Barre de commandes harmonisée et parfaitement symétrique (gauche = rechargement, droite = passer)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp),
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Actualiser le flux
-                            IconButton(
-                                onClick = {
-                                    activeStation?.let { viewModel.selectAndPlayStation(it) }
-                                },
-                                modifier = Modifier.size(48.dp)
+                            // Bouton circulaire gauche : Actualisation / Rechargement du flux
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                tonalElevation = 2.dp,
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        activeStation?.let { viewModel.selectAndPlayStation(it) }
+                                    }
+                                    .testTag("refresh_stream_button")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = strings.refresh,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = strings.refresh,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
 
-                            // Bouton principal Play / Pause
+                            // Bouton principal central : Play / Pause
                             Surface(
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.primary,
@@ -578,31 +693,31 @@ fun HomeScreen(
                                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                             contentDescription = if (isPlaying) strings.pause else strings.play,
                                             tint = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.size(40.dp)
+                                            modifier = Modifier.size(38.dp)
                                         )
                                     }
                                 }
                             }
 
-                            // Bouton Passer (Suivant)
-                            FilledTonalButton(
-                                onClick = { viewModel.nextSong() },
-                                shape = RoundedCornerShape(20.dp),
+                            // Bouton circulaire droit : Passer (Next song) harmonisé avec le bouton gauche
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                tonalElevation = 2.dp,
                                 modifier = Modifier
-                                    .height(52.dp)
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .clickable { viewModel.nextSong() }
                                     .testTag("next_song_button")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.SkipNext,
-                                    contentDescription = strings.skipNext,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = strings.skipNext,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = Icons.Default.SkipNext,
+                                        contentDescription = strings.skipNext,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -611,7 +726,7 @@ fun HomeScreen(
         }
     }
 
-    // Modal bottom sheet pour choisir rapidement la station
+    // Modal bottom sheet : Choisir une station
     if (showStationSelectorSheet) {
         ModalBottomSheet(
             onDismissRequest = { showStationSelectorSheet = false },
@@ -633,19 +748,22 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    OutlinedButton(
+                    // Bouton + Gérer harmonisé et aéré par rapport au titre
+                    FilledTonalButton(
                         onClick = {
                             showStationSelectorSheet = false
                             onNavigateToSettings()
-                        }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(strings.manage)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(strings.manage, style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 if (stations.isEmpty()) {
                     Text(
@@ -655,13 +773,13 @@ fun HomeScreen(
                     )
                 } else {
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         items(stations, key = { it.id }) { station ->
                             val isSelected = station.id == activeStation?.id
                             Card(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(18.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
                                     else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -686,20 +804,24 @@ fun HomeScreen(
                                         Text(
                                             text = station.name,
                                             style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                                             color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
                                             else MaterialTheme.colorScheme.onSurface
                                         )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        // URL sans coupure abrupte, lisible et contrastée
                                         Text(
                                             text = station.streamUrl,
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
 
                                     if (isSelected) {
+                                        Spacer(modifier = Modifier.width(12.dp))
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = strings.activeStation,
@@ -715,7 +837,7 @@ fun HomeScreen(
         }
     }
 
-    // Modal bottom sheet pour la diffusion DLNA / UPnP
+    // Modal bottom sheet : Diffuser (DLNA / UPnP) avec pictogramme audio
     if (showDlnaSheet) {
         ModalBottomSheet(
             onDismissRequest = { showDlnaSheet = false },
@@ -727,7 +849,7 @@ fun HomeScreen(
                     .padding(horizontal = 24.dp)
                     .padding(bottom = 32.dp)
             ) {
-                // En-tête : Titre + Bouton d'actualisation de la recherche
+                // En-tête : Titre + Bouton interactif bien dégagé
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -739,33 +861,39 @@ fun HomeScreen(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            text = strings.castDialogDesc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.startDlnaScan() },
-                        enabled = !isDlnaScanning
-                    ) {
+                    // Bouton interactif d'actualisation bien dégagé du bord droit
+                    Box(modifier = Modifier.padding(end = 4.dp)) {
                         if (isDlnaScanning) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.5.dp,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         } else {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = strings.scanAgain,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
+                            OutlinedButton(
+                                onClick = { viewModel.startDlnaScan() },
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(strings.scanAgain, style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Marges et texte descriptif aérés sous le titre
+                Text(
+                    text = strings.castDialogDesc,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
                 // Option 1 : Haut-parleur du téléphone
                 val isPhoneActive = !isDlnaCasting
@@ -831,25 +959,18 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Section header: Appareils DLNA
+                // Section header: Appareils audio détectés
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Appareils DLNA détectés (${dlnaDevices.size})",
+                        text = "Appareils audio détectés (${dlnaDevices.size})",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (isDlnaScanning) {
-                        Text(
-                            text = "Recherche…",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -861,12 +982,14 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier.padding(20.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             if (isDlnaScanning) {
-                                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.5.dp)
-                                Spacer(modifier = Modifier.height(12.dp))
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                                Spacer(modifier = Modifier.height(10.dp))
                                 Text(
                                     text = strings.searchingDevices,
                                     style = MaterialTheme.typography.bodyMedium,
@@ -905,7 +1028,6 @@ fun HomeScreen(
                     ) {
                         items(dlnaDevices, key = { it.id }) { device ->
                             val isCurrentDevice = isDlnaCasting && activeDlnaDevice?.id == device.id
-                            val isTv = device.name.contains("TV", ignoreCase = true) || device.modelName.contains("TV", ignoreCase = true)
 
                             Card(
                                 shape = RoundedCornerShape(16.dp),
@@ -936,8 +1058,9 @@ fun HomeScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.weight(1f)
                                     ) {
+                                        // Pictogramme audio de partage / streaming
                                         Icon(
-                                            imageVector = if (isTv) Icons.Default.Tv else Icons.Default.Speaker,
+                                            imageVector = Icons.Default.SpeakerGroup,
                                             contentDescription = null,
                                             tint = if (isCurrentDevice) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(24.dp)
@@ -988,16 +1111,18 @@ fun EmptyStationsCard(
 ) {
     val strings = LocalAppStrings.current
     Card(
+        modifier = modifier,
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        modifier = modifier.padding(16.dp)
+        )
     ) {
         Column(
-            modifier = Modifier.padding(28.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Surface(
                 shape = CircleShape,
@@ -1005,25 +1130,20 @@ fun EmptyStationsCard(
                 modifier = Modifier.size(72.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.GraphicEq,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(36.dp)
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_ocarina_logo),
+                        contentDescription = "Ocarina",
+                        modifier = Modifier.size(40.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
             Text(
                 text = strings.welcomeTitle,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = strings.welcomeDesc,
@@ -1032,17 +1152,12 @@ fun EmptyStationsCard(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
-
             Button(
                 onClick = onAddStationClicked,
                 shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
                 modifier = Modifier.testTag("add_first_station_button")
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(strings.addStation)
             }
