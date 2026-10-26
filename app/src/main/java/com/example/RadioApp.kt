@@ -13,6 +13,7 @@ class RadioApp : Application() {
     val database by lazy { RadioDatabase.getDatabase(this) }
     val repository by lazy { RadioRepository(database.radioStationDao()) }
     val preferences by lazy { AppPreferences.getInstance(this) }
+    val dlnaManager by lazy { com.example.dlna.DlnaManager(this) }
 
     override fun onCreate() {
         super.onCreate()

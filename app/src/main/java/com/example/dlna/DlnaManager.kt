@@ -281,6 +281,12 @@ class DlnaManager(private val context: Context) {
         }
     }
 
+    var lastStreamUrl: String? = null
+        private set
+
+    var lastStreamTitle: String? = null
+        private set
+
     suspend fun castStream(
         device: DlnaDevice,
         streamUrl: String,
@@ -288,16 +294,27 @@ class DlnaManager(private val context: Context) {
     ): Boolean = withContext(Dispatchers.IO) {
         _lastError.value = null
         try {
+            // Stop remote device if currently playing/transitioning
+            try {
+                sendStop(device.controlUrl)
+                delay(150)
+            } catch (e: Exception) {
+                // Ignore stop error
+            }
+
             val setUriSuccess = sendSetAvTransportUri(device.controlUrl, streamUrl, title)
             if (!setUriSuccess) {
                 _lastError.value = "Impossible de configurer le flux sur ${device.name}"
                 return@withContext false
             }
 
+            delay(100)
             val playSuccess = sendPlay(device.controlUrl)
             if (playSuccess) {
                 _activeDevice.value = device
                 _isCasting.value = true
+                lastStreamUrl = streamUrl
+                lastStreamTitle = title
                 return@withContext true
             } else {
                 _lastError.value = "Échec du lancement de la lecture sur ${device.name}"
@@ -310,6 +327,74 @@ class DlnaManager(private val context: Context) {
         }
     }
 
+    suspend fun resyncStream(
+        device: DlnaDevice,
+        streamUrl: String,
+        title: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        Log.i(TAG, "Executing STOP -> SET_AV_TRANSPORT_URI -> PLAY on ${device.name}")
+        _lastError.value = null
+        try {
+            // 1. STOP to purge renderer buffer
+            try {
+                sendStop(device.controlUrl)
+                delay(200)
+            } catch (e: Exception) {
+                Log.w(TAG, "Stop during resync failed: ${e.message}")
+            }
+
+            // 2. SET_AV_TRANSPORT_URI
+            val setUriSuccess = sendSetAvTransportUri(device.controlUrl, streamUrl, title)
+            if (!setUriSuccess) {
+                _lastError.value = "Impossible de reconfigurer le flux sur ${device.name}"
+                return@withContext false
+            }
+
+            delay(150)
+
+            // 3. PLAY
+            val playSuccess = sendPlay(device.controlUrl)
+            if (playSuccess) {
+                _activeDevice.value = device
+                _isCasting.value = true
+                lastStreamUrl = streamUrl
+                lastStreamTitle = title
+                return@withContext true
+            } else {
+                _lastError.value = "Échec de la relance de lecture sur ${device.name}"
+                return@withContext false
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Resync failed on ${device.name}: ${e.message}")
+            return@withContext false
+        }
+    }
+
+    suspend fun pause(): Boolean = withContext(Dispatchers.IO) {
+        val device = _activeDevice.value ?: return@withContext false
+        Log.i(TAG, "Pausing DLNA stream on ${device.name}")
+        val paused = sendPause(device.controlUrl)
+        if (!paused) {
+            // Live broadcast streams on some renderers reject Pause, fallback to Stop
+            Log.d(TAG, "Pause returned false, falling back to Stop for live stream")
+            sendStop(device.controlUrl)
+        }
+        return@withContext true
+    }
+
+    suspend fun resume(): Boolean = withContext(Dispatchers.IO) {
+        val device = _activeDevice.value ?: return@withContext false
+        Log.i(TAG, "Resuming DLNA stream on ${device.name}")
+        val played = sendPlay(device.controlUrl)
+        if (!played && !lastStreamUrl.isNullOrBlank()) {
+            Log.i(TAG, "Direct play returned false, re-applying transport URI and retrying Play")
+            sendSetAvTransportUri(device.controlUrl, lastStreamUrl!!, lastStreamTitle ?: device.name)
+            delay(150)
+            return@withContext sendPlay(device.controlUrl)
+        }
+        return@withContext played
+    }
+
     suspend fun stopCasting(): Boolean = withContext(Dispatchers.IO) {
         val device = _activeDevice.value ?: return@withContext true
         try {
@@ -319,6 +404,8 @@ class DlnaManager(private val context: Context) {
         } finally {
             _activeDevice.value = null
             _isCasting.value = false
+            lastStreamUrl = null
+            lastStreamTitle = null
         }
         return@withContext true
     }
@@ -363,6 +450,19 @@ class DlnaManager(private val context: Context) {
                 "</s:Envelope>"
 
         return sendSoapAction(controlUrl, "Play", soapBody)
+    }
+
+    private fun sendPause(controlUrl: String): Boolean {
+        val soapBody = "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">" +
+                "<s:Body>" +
+                "<u:Pause xmlns:u=\"urn:schemas-upnp-org:service:AVTransport:1\">" +
+                "<InstanceID>0</InstanceID>" +
+                "</u:Pause>" +
+                "</s:Body>" +
+                "</s:Envelope>"
+
+        return sendSoapAction(controlUrl, "Pause", soapBody)
     }
 
     private fun sendStop(controlUrl: String): Boolean {

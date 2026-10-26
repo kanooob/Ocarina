@@ -27,7 +27,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as RadioApp
     private val repository = app.repository
     private val preferences = app.preferences
-    val dlnaManager = com.example.dlna.DlnaManager(application)
+    val dlnaManager = app.dlnaManager
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -138,7 +138,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         val currentSelected = selectedStation.value
         val activePlaying = playerState.value.currentStation
 
-        if (activePlaying != null) {
+        if (activePlaying != null || dlnaManager.isCasting.value) {
             RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_TOGGLE)
         } else if (currentSelected != null) {
             RadioPlaybackService.playStation(getApplication(), currentSelected)
@@ -172,10 +172,13 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             val resolvedUrl = withContext(Dispatchers.IO) {
                 StreamUrlResolver.resolveStreamUrl(station.streamUrl)
             }
+            // Mute / pause local phone player first
+            RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_PAUSE)
+
             val success = dlnaManager.castStream(device, resolvedUrl, title)
             if (success) {
-                // Pause phone local playback to avoid echo with network speaker/TV
-                RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_PAUSE)
+                // Synchronize service with active DLNA playback
+                RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_SYNC_DLNA)
             }
             onComplete(success)
         }
@@ -183,7 +186,14 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
     fun disconnectDlna() {
         viewModelScope.launch {
+            val wasPlaying = playerState.value.status is PlaybackStatus.Playing
+            val currentStation = playerState.value.currentStation ?: selectedStation.value
             dlnaManager.stopCasting()
+            if (wasPlaying && currentStation != null) {
+                RadioPlaybackService.playStation(getApplication(), currentStation)
+            } else {
+                RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_PAUSE)
+            }
         }
     }
 
