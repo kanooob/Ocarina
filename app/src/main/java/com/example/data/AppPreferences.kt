@@ -18,6 +18,12 @@ enum class AppLanguage {
     ENGLISH
 }
 
+enum class ArtworkResolution {
+    DISABLED,
+    RES_300,
+    RES_600
+}
+
 class AppPreferences(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences("ondelive_prefs", Context.MODE_PRIVATE)
@@ -30,6 +36,9 @@ class AppPreferences(context: Context) {
 
     private val _skipStreamReload = MutableStateFlow(loadSkipStreamReload())
     val skipStreamReload: StateFlow<Boolean> = _skipStreamReload.asStateFlow()
+
+    private val _artworkResolution = MutableStateFlow(loadArtworkResolution())
+    val artworkResolution: StateFlow<ArtworkResolution> = _artworkResolution.asStateFlow()
 
     private fun loadThemeMode(): ThemeMode {
         val name = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
@@ -53,6 +62,15 @@ class AppPreferences(context: Context) {
         return prefs.getBoolean(KEY_SKIP_STREAM_RELOAD, true)
     }
 
+    private fun loadArtworkResolution(): ArtworkResolution {
+        val name = prefs.getString(KEY_ARTWORK_RESOLUTION, ArtworkResolution.RES_600.name) ?: ArtworkResolution.RES_600.name
+        return try {
+            ArtworkResolution.valueOf(name)
+        } catch (e: Exception) {
+            ArtworkResolution.RES_600
+        }
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
         _themeMode.value = mode
@@ -68,10 +86,16 @@ class AppPreferences(context: Context) {
         _skipStreamReload.value = enabled
     }
 
+    fun setArtworkResolution(resolution: ArtworkResolution) {
+        prefs.edit().putString(KEY_ARTWORK_RESOLUTION, resolution.name).apply()
+        _artworkResolution.value = resolution
+    }
+
     companion object {
         private const val KEY_THEME_MODE = "key_theme_mode"
         private const val KEY_LANGUAGE = "key_language"
         private const val KEY_SKIP_STREAM_RELOAD = "key_skip_stream_reload"
+        private const val KEY_ARTWORK_RESOLUTION = "key_artwork_resolution"
 
         @Volatile
         private var INSTANCE: AppPreferences? = null

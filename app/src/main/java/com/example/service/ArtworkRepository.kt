@@ -25,37 +25,49 @@ object ArtworkRepository {
     // Cache up to 100 recent track artwork URLs
     private val memoryCache = LruCache<String, String>(100)
 
+    fun clearCache() {
+        synchronized(memoryCache) {
+            memoryCache.evictAll()
+        }
+    }
+
     /**
-     * Searches for track album artwork with high-res 600x600 px priority.
+     * Searches for track album artwork with user selected resolution (DISABLED, 300x300, or 600x600).
      * Tries iTunes Search API first, then falls back to Deezer Public API.
      */
-    suspend fun findArtworkUrl(trackTitle: String): String? = withContext(Dispatchers.IO) {
+    suspend fun findArtworkUrl(
+        trackTitle: String,
+        resolution: com.example.data.ArtworkResolution = com.example.data.ArtworkResolution.RES_600
+    ): String? = withContext(Dispatchers.IO) {
+        if (resolution == com.example.data.ArtworkResolution.DISABLED) return@withContext null
+
         val cleanQuery = sanitizeTrackTitleForSearch(trackTitle)
         if (cleanQuery.isBlank() || cleanQuery.length < 3) return@withContext null
 
+        val cacheKey = "${resolution.name}:$cleanQuery"
         synchronized(memoryCache) {
-            val cached = memoryCache.get(cleanQuery)
+            val cached = memoryCache.get(cacheKey)
             if (cached != null) {
                 return@withContext if (cached.isEmpty()) null else cached
             }
         }
 
         // 1. Try iTunes Search API (Free, no API key required)
-        var artworkUrl = searchItunes(cleanQuery)
+        var artworkUrl = searchItunes(cleanQuery, resolution)
 
         // 2. Fallback to Deezer Search API if iTunes yields no results
         if (artworkUrl == null) {
-            artworkUrl = searchDeezer(cleanQuery)
+            artworkUrl = searchDeezer(cleanQuery, resolution)
         }
 
         synchronized(memoryCache) {
-            memoryCache.put(cleanQuery, artworkUrl ?: "")
+            memoryCache.put(cacheKey, artworkUrl ?: "")
         }
 
         return@withContext artworkUrl
     }
 
-    private fun searchItunes(query: String): String? {
+    private fun searchItunes(query: String, resolution: com.example.data.ArtworkResolution): String? {
         try {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val url = "https://itunes.apple.com/search?term=$encodedQuery&media=music&entity=song&limit=1"
@@ -74,8 +86,8 @@ object ArtworkRepository {
                     val firstItem = results?.optJSONObject(0)
                     val art100 = firstItem?.optString("artworkUrl100")
                     if (!art100.isNullOrBlank()) {
-                        // Upgrade resolution to 600x600 for sharp display
-                        return art100.replace("100x100bb.jpg", "600x600bb.jpg")
+                        val target = if (resolution == com.example.data.ArtworkResolution.RES_300) "300x300bb.jpg" else "600x600bb.jpg"
+                        return art100.replace("100x100bb.jpg", target)
                     }
                 }
             }
@@ -85,7 +97,7 @@ object ArtworkRepository {
         return null
     }
 
-    private fun searchDeezer(query: String): String? {
+    private fun searchDeezer(query: String, resolution: com.example.data.ArtworkResolution): String? {
         try {
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             val url = "https://api.deezer.com/search?q=$encodedQuery&limit=1"
@@ -105,11 +117,20 @@ object ArtworkRepository {
                     val coverXl = album?.optString("cover_xl")
                     val coverBig = album?.optString("cover_big")
                     val coverMed = album?.optString("cover_medium")
-                    val chosen = when {
-                        !coverXl.isNullOrBlank() -> coverXl
-                        !coverBig.isNullOrBlank() -> coverBig
-                        !coverMed.isNullOrBlank() -> coverMed
-                        else -> null
+                    val chosen = if (resolution == com.example.data.ArtworkResolution.RES_300) {
+                        when {
+                            !coverMed.isNullOrBlank() -> coverMed
+                            !coverBig.isNullOrBlank() -> coverBig
+                            !coverXl.isNullOrBlank() -> coverXl
+                            else -> null
+                        }
+                    } else {
+                        when {
+                            !coverXl.isNullOrBlank() -> coverXl
+                            !coverBig.isNullOrBlank() -> coverBig
+                            !coverMed.isNullOrBlank() -> coverMed
+                            else -> null
+                        }
                     }
                     if (chosen != null) return chosen
                 }

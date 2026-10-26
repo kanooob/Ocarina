@@ -16,6 +16,7 @@ data class PlayerState(
     val status: PlaybackStatus = PlaybackStatus.Idle,
     val currentStation: RadioStation? = null,
     val currentTrackTitle: String = "",
+    val currentTrackArtist: String = "",
     val artworkUrl: String? = null,
     val isChangingSong: Boolean = false,
     val reconnectFailed: Boolean = false,

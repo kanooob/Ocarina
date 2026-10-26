@@ -80,13 +80,18 @@ data class Strings(
     val disconnectCast: String,
     val castingTo: String,
     val connectingToDevice: String,
-    val errorCasting: String
+    val errorCasting: String,
+    val artworkResolutionTitle: String,
+    val artworkResolutionDesc: String,
+    val artworkDisabled: String,
+    val artwork300: String,
+    val artwork600: String
 )
 
 val FrenchStrings = Strings(
     appName = "Ocarina",
     chooseStation = "Choisir une station",
-    manage = "+ Gérer",
+    manage = "Gérer",
     liveBadge = "EN DIRECT",
     currentTrack = "MORCEAU DIFFUSÉ",
     liveBroadcast = "Diffusion en direct",
@@ -158,13 +163,18 @@ val FrenchStrings = Strings(
     disconnectCast = "Arrêter la diffusion",
     castingTo = "Diffusion sur %s",
     connectingToDevice = "Connexion à l'appareil…",
-    errorCasting = "Échec de l'envoi du flux à l'appareil"
+    errorCasting = "Échec de l'envoi du flux à l'appareil",
+    artworkResolutionTitle = "Pochette d'album des musiques",
+    artworkResolutionDesc = "Qualité de l'artwork des musiques : désactivé, 300×300 ou 600×600.",
+    artworkDisabled = "Désactivé",
+    artwork300 = "Activé (300×300)",
+    artwork600 = "Activé (600×600)"
 )
 
 val EnglishStrings = Strings(
     appName = "Ocarina",
     chooseStation = "Choose a station",
-    manage = "+ Manage",
+    manage = "Manage",
     liveBadge = "LIVE",
     currentTrack = "NOW PLAYING",
     liveBroadcast = "Live Broadcast",
@@ -236,7 +246,12 @@ val EnglishStrings = Strings(
     disconnectCast = "Stop casting",
     castingTo = "Casting to %s",
     connectingToDevice = "Connecting to device…",
-    errorCasting = "Failed to send stream to device"
+    errorCasting = "Failed to send stream to device",
+    artworkResolutionTitle = "Music Album Artwork",
+    artworkResolutionDesc = "Music artwork quality: disabled, 300×300, or 600×600.",
+    artworkDisabled = "Disabled",
+    artwork300 = "Enabled (300×300)",
+    artwork600 = "Enabled (600×600)"
 )
 
 val LocalAppStrings = compositionLocalOf { FrenchStrings }

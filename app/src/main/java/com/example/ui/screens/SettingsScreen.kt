@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +29,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Link
@@ -73,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AppLanguage
+import com.example.data.ArtworkResolution
 import com.example.data.RadioStation
 import com.example.data.ThemeMode
 import com.example.ui.LocalAppStrings
@@ -94,6 +99,7 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
     val skipStreamReload by viewModel.skipStreamReload.collectAsStateWithLifecycle()
+    val artworkResolution by viewModel.artworkResolution.collectAsStateWithLifecycle()
 
     var showEditDialog by remember { mutableStateOf(false) }
     var stationToEdit by remember { mutableStateOf<RadioStation?>(null) }
@@ -152,6 +158,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Section 1: Thème d'affichage
@@ -319,7 +326,67 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 4: Information Système (Lecteur système & Matériel connecté)
+            // Section 4: Pochette d'album des musiques (Artwork)
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Image,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = strings.artworkResolutionTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Text(
+                            text = strings.artworkResolutionDesc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        SelectableOptionRow(
+                            title = strings.artworkDisabled,
+                            icon = Icons.Default.ImageNotSupported,
+                            isSelected = artworkResolution == ArtworkResolution.DISABLED,
+                            onClick = { viewModel.setArtworkResolution(ArtworkResolution.DISABLED) },
+                            testTag = "artwork_disabled_option"
+                        )
+                        SelectableOptionRow(
+                            title = strings.artwork300,
+                            icon = Icons.Default.Image,
+                            isSelected = artworkResolution == ArtworkResolution.RES_300,
+                            onClick = { viewModel.setArtworkResolution(ArtworkResolution.RES_300) },
+                            testTag = "artwork_300_option"
+                        )
+                        SelectableOptionRow(
+                            title = strings.artwork600,
+                            icon = Icons.Default.HighQuality,
+                            isSelected = artworkResolution == ArtworkResolution.RES_600,
+                            onClick = { viewModel.setArtworkResolution(ArtworkResolution.RES_600) },
+                            testTag = "artwork_600_option"
+                        )
+                    }
+                }
+            }
+
+            // Section 5: Information Système (Lecteur système & Matériel connecté)
             item {
                 Card(
                     shape = RoundedCornerShape(20.dp),

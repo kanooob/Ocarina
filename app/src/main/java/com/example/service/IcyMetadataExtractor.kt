@@ -115,4 +115,26 @@ object IcyMetadataExtractor {
         }
         return result.replace(Regex("\\s+"), " ")
     }
+
+    /**
+     * Splits stream metadata string (typically "Artist - Title") into separate Artist and Title.
+     * Returns Pair(artist, title). If no separator found, returns Pair("", title).
+     */
+    fun parseArtistAndTitle(raw: String): Pair<String, String> {
+        val clean = sanitizeTitle(raw)
+        if (clean.isBlank()) return Pair("", "")
+
+        val separators = listOf(" - ", " – ", " — ", " : ")
+        for (sep in separators) {
+            val idx = clean.indexOf(sep)
+            if (idx > 0 && idx < clean.length - sep.length) {
+                val candidateArtist = clean.substring(0, idx).trim()
+                val candidateTitle = clean.substring(idx + sep.length).trim()
+                if (candidateArtist.isNotBlank() && candidateTitle.isNotBlank()) {
+                    return Pair(candidateArtist, candidateTitle)
+                }
+            }
+        }
+        return Pair("", clean)
+    }
 }

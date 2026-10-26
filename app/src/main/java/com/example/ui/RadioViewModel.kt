@@ -60,6 +60,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     val themeMode: StateFlow<ThemeMode> = preferences.themeMode
     val language: StateFlow<AppLanguage> = preferences.language
     val skipStreamReload: StateFlow<Boolean> = preferences.skipStreamReload
+    val artworkResolution: StateFlow<com.example.data.ArtworkResolution> = preferences.artworkResolution
 
     init {
         // Automatically sync launcher app shortcuts whenever stations are modified
@@ -80,6 +81,10 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setSkipStreamReload(enabled: Boolean) {
         preferences.setSkipStreamReload(enabled)
+    }
+
+    fun setArtworkResolution(resolution: com.example.data.ArtworkResolution) {
+        preferences.setArtworkResolution(resolution)
     }
 
     fun addStation(name: String, streamUrl: String, changeSongUrl: String, onResult: (Long) -> Unit = {}) {

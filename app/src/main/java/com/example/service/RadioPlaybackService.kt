@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -60,6 +61,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private var currentArtworkBitmap: android.graphics.Bitmap? = null
     private var hasPlayedSuccessfully = false
     private var activeStreamUrl: String? = null
+    private var notifyMetadataListener: ((MediaMetadata) -> Unit)? = null
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
@@ -129,7 +131,80 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             .setSessionCommand(nextCustomCommand)
             .build()
 
-        mediaSession = MediaSession.Builder(this, player)
+        val forwardingPlayer = object : ForwardingPlayer(player) {
+            private val playerListeners = java.util.concurrent.CopyOnWriteArraySet<Player.Listener>()
+
+            override fun addListener(listener: Player.Listener) {
+                playerListeners.add(listener)
+                super.addListener(listener)
+            }
+
+            override fun removeListener(listener: Player.Listener) {
+                playerListeners.remove(listener)
+                super.removeListener(listener)
+            }
+
+            override fun isCommandAvailable(command: Int): Boolean {
+                return command == Player.COMMAND_SEEK_TO_NEXT ||
+                       command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM ||
+                       super.isCommandAvailable(command)
+            }
+
+            override fun getAvailableCommands(): Player.Commands {
+                return super.getAvailableCommands().buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .build()
+            }
+
+            override fun seekToNext() {
+                triggerNextSong()
+            }
+
+            override fun seekToNextMediaItem() {
+                triggerNextSong()
+            }
+
+            override fun getMediaMetadata(): MediaMetadata {
+                val state = _playerState.value
+                val stationName = state.currentStation?.name ?: getString(R.string.app_name)
+                val trackTitle = state.currentTrackTitle
+                val trackArtist = state.currentTrackArtist
+
+                val displayTitle = if (trackTitle.isNotBlank()) trackTitle else stationName
+                val displayArtist = if (trackArtist.isNotBlank()) trackArtist else stationName
+                val artUri = state.artworkUrl?.let { Uri.parse(it) }
+
+                return MediaMetadata.Builder()
+                    .setTitle(displayTitle)
+                    .setDisplayTitle(displayTitle)
+                    .setArtist(displayArtist)
+                    .setStation(stationName)
+                    .apply {
+                        if (artUri != null) {
+                            setArtworkUri(artUri)
+                        }
+                    }
+                    .build()
+            }
+
+            fun notifyListenersMetadata(newMetadata: MediaMetadata) {
+                for (listener in playerListeners) {
+                    try {
+                        listener.onMediaMetadataChanged(newMetadata)
+                        listener.onPlaylistMetadataChanged(newMetadata)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Listener metadata dispatch error: ${e.message}")
+                    }
+                }
+            }
+        }
+
+        notifyMetadataListener = { meta ->
+            forwardingPlayer.notifyListenersMetadata(meta)
+        }
+
+        mediaSession = MediaSession.Builder(this, forwardingPlayer)
             .setSessionActivity(sessionActivityPendingIntent)
             .setCustomLayout(listOf(nextButton))
             .setCallback(object : MediaSession.Callback {
@@ -152,6 +227,18 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                         .build()
                 }
 
+                override fun onPlayerCommandRequest(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    playerCommand: Int
+                ): Int {
+                    if (playerCommand == Player.COMMAND_SEEK_TO_NEXT || playerCommand == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM) {
+                        triggerNextSong()
+                        return SessionResult.RESULT_SUCCESS
+                    }
+                    return super.onPlayerCommandRequest(session, controller, playerCommand)
+                }
+
                 override fun onCustomCommand(
                     session: MediaSession,
                     controller: MediaSession.ControllerInfo,
@@ -166,6 +253,21 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 }
             })
             .build()
+
+        // Observer for user artwork resolution setting changes
+        serviceScope.launch {
+            com.example.data.AppPreferences.getInstance(this@RadioPlaybackService)
+                .artworkResolution.collect { res ->
+                    val currentTrack = _playerState.value.currentTrackTitle
+                    val currentArtist = _playerState.value.currentTrackArtist
+                    if (currentTrack.isNotBlank()) {
+                        val stationName = _playerState.value.currentStation?.name ?: getString(R.string.app_name)
+                        val effectiveArtist = if (currentArtist.isNotBlank()) currentArtist else stationName
+                        val searchQuery = if (currentArtist.isNotBlank()) "$currentArtist $currentTrack" else currentTrack
+                        fetchArtworkForTrack(searchQuery, currentTrack, effectiveArtist, res)
+                    }
+                }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -267,6 +369,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 currentStation = effectiveStation,
                 status = PlaybackStatus.Buffering,
                 currentTrackTitle = "",
+                currentTrackArtist = "",
                 artworkUrl = null,
                 reconnectFailed = false,
                 message = null
@@ -311,18 +414,29 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         activeStreamUrl = streamUrl
 
         try {
+            val currentTrack = _playerState.value.currentTrackTitle
+            val currentArtist = _playerState.value.currentTrackArtist
+            val effectiveTitle = if (currentTrack.isNotBlank()) currentTrack else stationName
+            val effectiveArtist = if (currentArtist.isNotBlank()) currentArtist else stationName
+
             val initialMetadata = MediaMetadata.Builder()
-                .setTitle(stationName)
-                .setDisplayTitle(stationName)
-                .setArtist("Webradio en direct")
+                .setTitle(effectiveTitle)
+                .setDisplayTitle(effectiveTitle)
+                .setArtist(effectiveArtist)
+                .setStation(stationName)
                 .build()
 
+            // CRITICAL: Do NOT set static mediaMetadata on MediaItem.
+            // When MediaItem has static mediaMetadata, ExoPlayer locks those values and ignores
+            // dynamic updates from playlistMetadata. Leaving mediaItem free allows dynamic metadata
+            // from stream and polling to propagate immediately to MediaSession and notification.
             val mediaItem = MediaItem.Builder()
                 .setUri(parsedUri)
-                .setMediaMetadata(initialMetadata)
                 .build()
 
             player.setMediaItem(mediaItem)
+            player.playlistMetadata = initialMetadata
+            notifyMetadataListener?.invoke(initialMetadata)
             player.prepare()
             player.playWhenReady = true
 
@@ -395,26 +509,67 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         }
     }
 
-    private fun updateTrackTitle(title: String) {
-        val cleanTitle = IcyMetadataExtractor.sanitizeTitle(title)
-        if (cleanTitle.isBlank() || cleanTitle == _playerState.value.currentTrackTitle) return
+    private fun updateTrackTitle(rawTitle: String) {
+        val (parsedArtist, parsedTitle) = IcyMetadataExtractor.parseArtistAndTitle(rawTitle)
+        val cleanTitle = if (parsedTitle.isNotBlank()) parsedTitle else IcyMetadataExtractor.sanitizeTitle(rawTitle)
+        val cleanArtist = parsedArtist.trim()
 
-        _playerState.update { it.copy(currentTrackTitle = cleanTitle) }
+        if (cleanTitle.isBlank() || 
+            (cleanTitle == _playerState.value.currentTrackTitle && cleanArtist == _playerState.value.currentTrackArtist)) {
+            return
+        }
 
         val stationName = _playerState.value.currentStation?.name ?: getString(R.string.app_name)
-        val initialMetadata = MediaMetadata.Builder()
+        val effectiveArtist = if (cleanArtist.isNotBlank()) cleanArtist else stationName
+
+        _playerState.update { 
+            it.copy(
+                currentTrackTitle = cleanTitle,
+                currentTrackArtist = cleanArtist
+            ) 
+        }
+
+        val updatedMetadata = MediaMetadata.Builder()
             .setTitle(cleanTitle)
             .setDisplayTitle(cleanTitle)
-            .setArtist(stationName)
+            .setArtist(effectiveArtist)
             .setStation(stationName)
             .build()
-        exoPlayer?.playlistMetadata = initialMetadata
+        exoPlayer?.playlistMetadata = updatedMetadata
+        notifyMetadataListener?.invoke(updatedMetadata)
         updateForegroundNotification()
 
-        // Fetch album artwork asynchronously
+        val searchQuery = if (cleanArtist.isNotBlank()) "$cleanArtist $cleanTitle" else cleanTitle
+        val resolution = com.example.data.AppPreferences.getInstance(this).artworkResolution.value
+        fetchArtworkForTrack(searchQuery, cleanTitle, effectiveArtist, resolution)
+    }
+
+    private fun fetchArtworkForTrack(
+        searchQuery: String,
+        cleanTitle: String,
+        effectiveArtist: String,
+        resolution: com.example.data.ArtworkResolution
+    ) {
         artworkJob?.cancel()
+        val stationName = _playerState.value.currentStation?.name ?: getString(R.string.app_name)
+
+        if (resolution == com.example.data.ArtworkResolution.DISABLED) {
+            currentArtworkBitmap = null
+            _playerState.update { it.copy(artworkUrl = null) }
+            val updatedMetadata = MediaMetadata.Builder()
+                .setTitle(cleanTitle)
+                .setDisplayTitle(cleanTitle)
+                .setArtist(effectiveArtist)
+                .setStation(stationName)
+                .build()
+            exoPlayer?.playlistMetadata = updatedMetadata
+            notifyMetadataListener?.invoke(updatedMetadata)
+            updateForegroundNotification()
+            return
+        }
+
         artworkJob = serviceScope.launch {
-            val artUrl = ArtworkRepository.findArtworkUrl(cleanTitle)
+            val artUrl = ArtworkRepository.findArtworkUrl(searchQuery, resolution)
             _playerState.update { it.copy(artworkUrl = artUrl) }
 
             if (!artUrl.isNullOrBlank()) {
@@ -423,13 +578,24 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 val updatedMetadata = MediaMetadata.Builder()
                     .setTitle(cleanTitle)
                     .setDisplayTitle(cleanTitle)
-                    .setArtist(stationName)
+                    .setArtist(effectiveArtist)
                     .setStation(stationName)
                     .setArtworkUri(Uri.parse(artUrl))
                     .build()
                 exoPlayer?.playlistMetadata = updatedMetadata
-                updateForegroundNotification()
+                notifyMetadataListener?.invoke(updatedMetadata)
+            } else {
+                currentArtworkBitmap = null
+                val updatedMetadata = MediaMetadata.Builder()
+                    .setTitle(cleanTitle)
+                    .setDisplayTitle(cleanTitle)
+                    .setArtist(effectiveArtist)
+                    .setStation(stationName)
+                    .build()
+                exoPlayer?.playlistMetadata = updatedMetadata
+                notifyMetadataListener?.invoke(updatedMetadata)
             }
+            updateForegroundNotification()
         }
     }
 
@@ -447,11 +613,25 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             else -> "Prêt à diffuser"
         }
 
-        // Priority rule: Show track title first. Fall back to station name only when track is missing
-        val (notificationTitle, notificationText) = if (state.currentTrackTitle.isNotBlank()) {
-            Pair(state.currentTrackTitle, stationName)
+        // Title: track title if available, otherwise station name (nom de la radio)
+        val notificationTitle = if (state.currentTrackTitle.isNotBlank()) {
+            state.currentTrackTitle
         } else {
-            Pair(stationName, statusText)
+            stationName
+        }
+
+        // Subtitle: artist if available, otherwise station name
+        val notificationText = when {
+            state.currentTrackArtist.isNotBlank() -> state.currentTrackArtist
+            state.currentTrackTitle.isNotBlank() -> stationName
+            else -> stationName
+        }
+
+        // Subtext: station name + status when artist is available, otherwise statusText
+        val notificationSubText = if (state.currentTrackArtist.isNotBlank()) {
+            "$stationName • $statusText"
+        } else {
+            statusText
         }
 
         val sessionActivityIntent = Intent(this, MainActivity::class.java).apply {
@@ -479,7 +659,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         val builder = NotificationCompat.Builder(this, RadioApp.NOTIFICATION_CHANNEL_ID)
             .setContentTitle(notificationTitle)
             .setContentText(notificationText)
-            .setSubText(if (state.currentTrackTitle.isNotBlank()) statusText else "Ocarina • Webradio")
+            .setSubText(notificationSubText)
             .setSmallIcon(R.drawable.ic_ocarina_logo)
             .setStyle(
                 MediaStyleNotificationHelper.MediaStyle(session)
@@ -516,6 +696,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             } else {
                 startForeground(RadioApp.NOTIFICATION_ID, notification)
             }
+            val notificationManager = getSystemService(android.app.NotificationManager::class.java)
+            notificationManager?.notify(RadioApp.NOTIFICATION_ID, notification)
         } catch (e: Exception) {
             Log.w(TAG, "Error in startForeground: ${e.message}")
         }
@@ -821,7 +1003,26 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
         nextSongJob?.cancel()
         nextSongJob = serviceScope.launch {
-            _playerState.update { it.copy(isChangingSong = true, message = "Changement de morceau en cours…") }
+            val stationName = currentStation.name
+            _playerState.update { 
+                it.copy(
+                    isChangingSong = true,
+                    currentTrackTitle = "",
+                    currentTrackArtist = "",
+                    artworkUrl = null,
+                    message = "Changement de morceau en cours…"
+                ) 
+            }
+            currentArtworkBitmap = null
+
+            val pendingMetadata = MediaMetadata.Builder()
+                .setTitle(stationName)
+                .setDisplayTitle(stationName)
+                .setArtist(stationName)
+                .setStation(stationName)
+                .build()
+            exoPlayer?.playlistMetadata = pendingMetadata
+            notifyMetadataListener?.invoke(pendingMetadata)
             updateForegroundNotification()
 
             if (currentStation.changeSongUrl.isNotBlank()) {
@@ -857,19 +1058,25 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 prepareAndPlayExoPlayer(resolvedUrl, currentStation.name)
                 _playerState.update { it.copy(isChangingSong = false, message = "Morceau actualisé") }
 
-                // Poll metadata again
-                delay(1500)
-                val updatedTitle = IcyMetadataExtractor.fetchCurrentTrackTitle(resolvedUrl)
-                if (!updatedTitle.isNullOrBlank()) {
-                    updateTrackTitle(updatedTitle)
+                // Progressive polling to catch new track metadata immediately upon stream restart
+                for (pollDelay in listOf(600L, 1200L, 2200L)) {
+                    delay(pollDelay)
+                    val updatedTitle = IcyMetadataExtractor.fetchCurrentTrackTitle(resolvedUrl)
+                    if (!updatedTitle.isNullOrBlank() && updatedTitle != currentStation.name) {
+                        updateTrackTitle(updatedTitle)
+                        break
+                    }
                 }
             } else {
                 _playerState.update { it.copy(isChangingSong = false, message = "Morceau suivant demandé") }
-                delay(2000)
-                val currentUrl = activeStreamUrl ?: currentStation.streamUrl
-                val updatedTitle = IcyMetadataExtractor.fetchCurrentTrackTitle(currentUrl)
-                if (!updatedTitle.isNullOrBlank()) {
-                    updateTrackTitle(updatedTitle)
+                for (pollDelay in listOf(1000L, 1800L, 2500L)) {
+                    delay(pollDelay)
+                    val currentUrl = activeStreamUrl ?: currentStation.streamUrl
+                    val updatedTitle = IcyMetadataExtractor.fetchCurrentTrackTitle(currentUrl)
+                    if (!updatedTitle.isNullOrBlank() && updatedTitle != currentStation.name) {
+                        updateTrackTitle(updatedTitle)
+                        break
+                    }
                 }
             }
         }

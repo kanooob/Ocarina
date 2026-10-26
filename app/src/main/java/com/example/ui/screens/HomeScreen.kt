@@ -423,6 +423,19 @@ fun HomeScreen(
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
+
+                                if (playerState.currentTrackArtist.isNotBlank() && !playerState.isChangingSong) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = playerState.currentTrackArtist,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
 
