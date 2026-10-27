@@ -7,5 +7,6 @@ data class DlnaDevice(
     val manufacturer: String = "",
     val locationUrl: String,
     val controlUrl: String,
+    val renderingControlUrl: String? = null,
     val iconUrl: String? = null
 )

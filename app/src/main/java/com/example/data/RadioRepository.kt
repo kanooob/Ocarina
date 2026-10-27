@@ -48,4 +48,29 @@ class RadioRepository(private val dao: RadioStationDao) {
     suspend fun selectStation(id: Long) {
         dao.selectOnlyStation(id)
     }
+
+    suspend fun getAllStationsSync(): List<RadioStation> = dao.getAllStationsSync()
+
+    suspend fun replaceAllStations(newStations: List<RadioStation>) {
+        dao.deleteAllStations()
+        if (newStations.isNotEmpty()) {
+            val stationsWithSelection = newStations.mapIndexed { index, station ->
+                station.copy(id = 0, isSelected = index == 0)
+            }
+            dao.insertStations(stationsWithSelection)
+        }
+    }
+
+    suspend fun mergeStations(incomingStations: List<RadioStation>) {
+        val current = dao.getAllStationsSync()
+        val currentUrls = current.map { it.streamUrl.trim().lowercase() }.toSet()
+        val toInsert = incomingStations.filter { it.streamUrl.trim().lowercase() !in currentUrls }
+        if (toInsert.isNotEmpty()) {
+            val markSelected = current.isEmpty()
+            val mapped = toInsert.mapIndexed { index, s ->
+                s.copy(id = 0, isSelected = markSelected && index == 0)
+            }
+            dao.insertStations(mapped)
+        }
+    }
 }

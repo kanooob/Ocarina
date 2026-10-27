@@ -40,6 +40,7 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     val activeDlnaDevice: StateFlow<com.example.dlna.DlnaDevice?> = dlnaManager.activeDevice
     val isDlnaCasting: StateFlow<Boolean> = dlnaManager.isCasting
     val dlnaError: StateFlow<String?> = dlnaManager.lastError
+    val dlnaVolume: StateFlow<Int> = dlnaManager.volume
 
     val stations: StateFlow<List<RadioStation>> = repository.allStations
         .stateIn(
@@ -61,6 +62,11 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     val language: StateFlow<AppLanguage> = preferences.language
     val skipStreamReload: StateFlow<Boolean> = preferences.skipStreamReload
     val artworkResolution: StateFlow<com.example.data.ArtworkResolution> = preferences.artworkResolution
+    val totalListeningSeconds: StateFlow<Long> = preferences.totalListeningSeconds
+
+    fun resetListeningTime() {
+        preferences.resetListeningTime()
+    }
 
     init {
         // Automatically sync launcher app shortcuts whenever stations are modified
@@ -167,24 +173,64 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 onComplete(false)
                 return@launch
             }
-            val title = if (playerState.value.currentTrackTitle.isNotBlank()) {
-                "${station.name} - ${playerState.value.currentTrackTitle}"
-            } else {
-                station.name
-            }
             val resolvedUrl = withContext(Dispatchers.IO) {
                 StreamUrlResolver.resolveStreamUrl(station.streamUrl)
             }
+
+            // Extraction prioritaire des métadonnées du flux en direct (titre et artiste)
+            val streamMeta = withContext(Dispatchers.IO) {
+                try {
+                    kotlinx.coroutines.withTimeoutOrNull(1200) {
+                        com.example.service.IcyMetadataExtractor.fetchStreamMetadata(resolvedUrl)
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            val stateTrack = playerState.value.currentTrackTitle.takeIf { it.isNotBlank() }
+            val stateArtist = playerState.value.currentTrackArtist.takeIf { it.isNotBlank() }
+
+            val rawStreamTitle = streamMeta?.title?.trim().orEmpty()
+            val (parsedArtist, parsedTrack) = if (rawStreamTitle.isNotBlank()) {
+                com.example.service.IcyMetadataExtractor.parseArtistAndTitle(rawStreamTitle)
+            } else {
+                Pair(stateArtist ?: "", stateTrack ?: "")
+            }
+
+            val finalTrack = if (parsedTrack.isNotBlank()) parsedTrack else (stateTrack ?: "")
+            val finalArtist = if (parsedArtist.isNotBlank()) parsedArtist else (stateArtist ?: "")
+
+            val dlnaStreamTitle = if (finalTrack.isNotBlank()) {
+                if (finalArtist.isNotBlank()) "$finalArtist - $finalTrack" else finalTrack
+            } else {
+                station.name
+            }
+
             // Mute / pause local phone player first
             RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_PAUSE)
 
-            val success = dlnaManager.castStream(device, resolvedUrl, title)
+            val success = dlnaManager.castStream(
+                device = device,
+                streamUrl = resolvedUrl,
+                title = dlnaStreamTitle,
+                artist = finalArtist,
+                stationName = station.name,
+                artworkUrl = playerState.value.artworkUrl
+            )
             if (success) {
                 // Synchronize service with active DLNA playback
                 RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_SYNC_DLNA)
             }
             onComplete(success)
         }
+    }
+
+    fun setDlnaVolume(vol: Int) {
+        dlnaManager.setVolumeAsync(vol)
+    }
+
+    fun adjustDlnaVolume(delta: Int) {
+        dlnaManager.adjustVolume(delta)
     }
 
     fun disconnectDlna() {
@@ -196,6 +242,45 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 RadioPlaybackService.playStation(getApplication(), currentStation)
             } else {
                 RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_PAUSE)
+            }
+        }
+    }
+
+    suspend fun exportDataJson(): String = withContext(Dispatchers.IO) {
+        val stations = repository.getAllStationsSync().map {
+            com.example.data.ExportedStation(
+                name = it.name,
+                streamUrl = it.streamUrl,
+                changeSongUrl = it.changeSongUrl
+            )
+        }
+        val backup = com.example.data.BackupData(
+            totalListeningSeconds = preferences.totalListeningSeconds.value,
+            stations = stations
+        )
+        backup.toJsonString()
+    }
+
+    suspend fun importData(
+        backupData: com.example.data.BackupData,
+        replaceExisting: Boolean
+    ) = withContext(Dispatchers.IO) {
+        val stationsToInsert = backupData.stations.map {
+            RadioStation(
+                name = it.name,
+                streamUrl = it.streamUrl,
+                changeSongUrl = it.changeSongUrl
+            )
+        }
+
+        if (replaceExisting) {
+            repository.replaceAllStations(stationsToInsert)
+            preferences.setTotalListeningSeconds(backupData.totalListeningSeconds)
+        } else {
+            repository.mergeStations(stationsToInsert)
+            if (backupData.totalListeningSeconds > 0) {
+                val updatedDuration = maxOf(preferences.totalListeningSeconds.value, backupData.totalListeningSeconds)
+                preferences.setTotalListeningSeconds(updatedDuration)
             }
         }
     }

@@ -20,5 +20,6 @@ data class PlayerState(
     val artworkUrl: String? = null,
     val isChangingSong: Boolean = false,
     val reconnectFailed: Boolean = false,
+    val bitrateKbps: Int? = null,
     val message: String? = null
 )

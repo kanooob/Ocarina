@@ -55,4 +55,13 @@ class ExampleUnitTest {
     assertEquals("AC'DC", pair4.first)
     assertEquals("Back in Black", pair4.second)
   }
+
+  @Test
+  fun playerState_bitrateKbps_defaultsToNull_andCanBeUpdated() {
+    val state = com.example.service.PlayerState()
+    assertNull(state.bitrateKbps)
+
+    val updatedState = state.copy(bitrateKbps = 128)
+    assertEquals(128, updatedState.bitrateKbps)
+  }
 }

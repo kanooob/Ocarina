@@ -58,10 +58,28 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private var metadataJob: Job? = null
     private var nextSongJob: Job? = null
     private var artworkJob: Job? = null
+    private var listeningTimeJob: Job? = null
     private var currentArtworkBitmap: android.graphics.Bitmap? = null
     private var hasPlayedSuccessfully = false
     private var activeStreamUrl: String? = null
     private var notifyMetadataListener: ((MediaMetadata) -> Unit)? = null
+
+    private fun startListeningTracker() {
+        if (listeningTimeJob?.isActive == true) return
+        listeningTimeJob = serviceScope.launch {
+            while (isActive) {
+                delay(1000L)
+                if (exoPlayer?.isPlaying == true || dlnaManager.isDlnaActive) {
+                    com.example.data.AppPreferences.getInstance(this@RadioPlaybackService).addListeningSeconds(1L)
+                }
+            }
+        }
+    }
+
+    private fun stopListeningTracker() {
+        listeningTimeJob?.cancel()
+        listeningTimeJob = null
+    }
 
     private val dlnaManager: com.example.dlna.DlnaManager
         get() = (application as RadioApp).dlnaManager
@@ -154,6 +172,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 return command == Player.COMMAND_PLAY_PAUSE ||
                        command == Player.COMMAND_SEEK_TO_NEXT ||
                        command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM ||
+                       command == Player.COMMAND_SET_DEVICE_VOLUME ||
+                       command == Player.COMMAND_ADJUST_DEVICE_VOLUME ||
                        super.isCommandAvailable(command)
             }
 
@@ -162,7 +182,74 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     .add(Player.COMMAND_PLAY_PAUSE)
                     .add(Player.COMMAND_SEEK_TO_NEXT)
                     .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .add(Player.COMMAND_SET_DEVICE_VOLUME)
+                    .add(Player.COMMAND_ADJUST_DEVICE_VOLUME)
                     .build()
+            }
+
+            override fun getDeviceInfo(): androidx.media3.common.DeviceInfo {
+                if (isDlnaActive) {
+                    return androidx.media3.common.DeviceInfo.Builder(androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE)
+                        .setMinVolume(0)
+                        .setMaxVolume(100)
+                        .build()
+                }
+                return super.getDeviceInfo()
+            }
+
+            override fun getDeviceVolume(): Int {
+                if (isDlnaActive) {
+                    return dlnaManager.volume.value
+                }
+                return super.getDeviceVolume()
+            }
+
+            override fun setDeviceVolume(volume: Int) {
+                if (isDlnaActive) {
+                    dlnaManager.setVolumeAsync(volume)
+                    return
+                }
+                super.setDeviceVolume(volume)
+            }
+
+            override fun setDeviceVolume(volume: Int, flags: Int) {
+                if (isDlnaActive) {
+                    dlnaManager.setVolumeAsync(volume)
+                    return
+                }
+                super.setDeviceVolume(volume, flags)
+            }
+
+            override fun increaseDeviceVolume() {
+                if (isDlnaActive) {
+                    dlnaManager.adjustVolume(5)
+                    return
+                }
+                super.increaseDeviceVolume()
+            }
+
+            override fun increaseDeviceVolume(flags: Int) {
+                if (isDlnaActive) {
+                    dlnaManager.adjustVolume(5)
+                    return
+                }
+                super.increaseDeviceVolume(flags)
+            }
+
+            override fun decreaseDeviceVolume() {
+                if (isDlnaActive) {
+                    dlnaManager.adjustVolume(-5)
+                    return
+                }
+                super.decreaseDeviceVolume()
+            }
+
+            override fun decreaseDeviceVolume(flags: Int) {
+                if (isDlnaActive) {
+                    dlnaManager.adjustVolume(-5)
+                    return
+                }
+                super.decreaseDeviceVolume(flags)
             }
 
             override fun play() {
@@ -515,9 +602,47 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 try {
                     val resolvedUrl = StreamUrlResolver.resolveStreamUrl(effectiveStation.streamUrl)
                     activeStreamUrl = resolvedUrl
-                    // Conserver l'URI du renderer DLNA distant lors du changement de source
-                    // et transmettre la nouvelle URL directement au renderer distant sans couper la connexion UPnP
-                    val success = dlnaManager.changeSource(resolvedUrl, effectiveStation.name)
+
+                    // Résolution des métadonnées du flux en direct (titre et artiste)
+                    val streamMeta = withContext(Dispatchers.IO) {
+                        try {
+                            kotlinx.coroutines.withTimeoutOrNull(1200) {
+                                IcyMetadataExtractor.fetchStreamMetadata(resolvedUrl)
+                            }
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    val rawTitle = streamMeta?.title?.trim().orEmpty()
+                    val (parsedArtist, parsedTrack) = if (rawTitle.isNotBlank()) {
+                        IcyMetadataExtractor.parseArtistAndTitle(rawTitle)
+                    } else {
+                        Pair("", "")
+                    }
+                    val cleanTitle = if (parsedTrack.isNotBlank()) parsedTrack else rawTitle
+                    val dlnaStreamTitle = if (cleanTitle.isNotBlank()) {
+                        if (parsedArtist.isNotBlank()) "$parsedArtist - $cleanTitle" else cleanTitle
+                    } else {
+                        effectiveStation.name
+                    }
+
+                    if (cleanTitle.isNotBlank()) {
+                        _playerState.update {
+                            it.copy(
+                                currentTrackTitle = cleanTitle,
+                                currentTrackArtist = parsedArtist
+                            )
+                        }
+                    }
+
+                    // Transmission des métadonnées du flux au renderer DLNA au lieu du simple nom de la station
+                    val success = dlnaManager.changeSource(
+                        streamUrl = resolvedUrl,
+                        title = dlnaStreamTitle,
+                        artist = parsedArtist,
+                        stationName = effectiveStation.name,
+                        artworkUrl = _playerState.value.artworkUrl
+                    )
                     if (success) {
                         hasPlayedSuccessfully = true
                         _playerState.update {
@@ -691,6 +816,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         if (isPlaying) {
             hasPlayedSuccessfully = true
             cancelReconnect()
+            startListeningTracker()
             _playerState.update { it.copy(status = PlaybackStatus.Playing) }
             val currentUrl = activeStreamUrl
             if (!currentUrl.isNullOrBlank()) {
@@ -698,11 +824,41 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             }
         } else {
             cancelMetadataPolling()
+            if (!dlnaManager.isDlnaActive) {
+                stopListeningTracker()
+            }
             if (_playerState.value.status is PlaybackStatus.Playing) {
                 _playerState.update { it.copy(status = PlaybackStatus.Paused) }
             }
         }
         updateForegroundNotification()
+    }
+
+    override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+        for (group in tracks.groups) {
+            if (group.type == C.TRACK_TYPE_AUDIO) {
+                for (i in 0 until group.length) {
+                    val format = group.getTrackFormat(i)
+                    if (format.bitrate > 0) {
+                        val kbps = format.bitrate / 1000
+                        _playerState.update { it.copy(bitrateKbps = kbps) }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onMetadata(metadata: androidx.media3.common.Metadata) {
+        for (i in 0 until metadata.length()) {
+            val entry = metadata.get(i)
+            if (entry is androidx.media3.extractor.metadata.icy.IcyHeaders) {
+                val br = entry.bitrate
+                if (br > 0) {
+                    val kbps = if (br > 1000) br / 1000 else br
+                    _playerState.update { it.copy(bitrateKbps = kbps) }
+                }
+            }
+        }
     }
 
     override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
@@ -757,6 +913,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         artworkJob?.cancel()
         val stationName = _playerState.value.currentStation?.name ?: getString(R.string.app_name)
 
+        val defaultArtworkUri = Uri.parse("android.resource://$packageName/${R.drawable.ic_ocarina_logo}")
+
         if (resolution == com.example.data.ArtworkResolution.DISABLED) {
             currentArtworkBitmap = null
             _playerState.update { it.copy(artworkUrl = null) }
@@ -765,6 +923,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 .setDisplayTitle(cleanTitle)
                 .setArtist(effectiveArtist)
                 .setStation(stationName)
+                .setArtworkUri(defaultArtworkUri)
                 .build()
             exoPlayer?.playlistMetadata = updatedMetadata
             notifyMetadataListener?.invoke(updatedMetadata)
@@ -795,6 +954,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     .setDisplayTitle(cleanTitle)
                     .setArtist(effectiveArtist)
                     .setStation(stationName)
+                    .setArtworkUri(defaultArtworkUri)
                     .build()
                 exoPlayer?.playlistMetadata = updatedMetadata
                 notifyMetadataListener?.invoke(updatedMetadata)
@@ -893,8 +1053,14 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 nextPendingIntent
             )
 
-        currentArtworkBitmap?.let {
-            builder.setLargeIcon(it)
+        val defaultLogoBitmap = try {
+            android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_ocarina_logo)
+        } catch (e: Exception) {
+            null
+        }
+        val iconToUse = currentArtworkBitmap ?: defaultLogoBitmap
+        if (iconToUse != null) {
+            builder.setLargeIcon(iconToUse)
         }
 
         val notification = builder.build()
@@ -1268,7 +1434,23 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 if (shouldReloadStream) {
                     // Requirement 3: Envoi explicite STOP -> SET_AV_TRANSPORT_URI -> PLAY au renderer distant pour vider et resynchroniser le buffer
                     delay(300)
-                    val resyncSuccess = dlnaManager.resyncStream(activeDev, resolvedUrl, currentStation.name)
+                    val dlnaTitle = if (_playerState.value.currentTrackTitle.isNotBlank()) {
+                        if (_playerState.value.currentTrackArtist.isNotBlank()) {
+                            "${_playerState.value.currentTrackArtist} - ${_playerState.value.currentTrackTitle}"
+                        } else {
+                            _playerState.value.currentTrackTitle
+                        }
+                    } else {
+                        currentStation.name
+                    }
+                    val resyncSuccess = dlnaManager.resyncStream(
+                        device = activeDev,
+                        streamUrl = resolvedUrl,
+                        title = dlnaTitle,
+                        artist = _playerState.value.currentTrackArtist,
+                        stationName = currentStation.name,
+                        artworkUrl = _playerState.value.artworkUrl
+                    )
                     _playerState.update { 
                         it.copy(
                             isChangingSong = false, 
@@ -1465,9 +1647,12 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         cancelMetadataPolling()
         metadataJob = serviceScope.launch {
             while (isActive) {
-                val title = IcyMetadataExtractor.fetchCurrentTrackTitle(streamUrl)
-                if (!title.isNullOrBlank()) {
-                    updateTrackTitle(title)
+                val metadata = IcyMetadataExtractor.fetchStreamMetadata(streamUrl)
+                if (metadata.bitrateKbps != null && metadata.bitrateKbps > 0) {
+                    _playerState.update { it.copy(bitrateKbps = metadata.bitrateKbps) }
+                }
+                if (!metadata.title.isNullOrBlank()) {
+                    updateTrackTitle(metadata.title)
                 }
                 delay(10000) // Poll ICY title every 10 seconds
             }
@@ -1482,6 +1667,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     fun stopPlaybackService() {
         cancelReconnect()
         cancelMetadataPolling()
+        stopListeningTracker()
         nextSongJob?.cancel()
         artworkJob?.cancel()
         currentArtworkBitmap = null
@@ -1499,6 +1685,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 status = PlaybackStatus.Idle,
                 currentTrackTitle = "",
                 artworkUrl = null,
+                bitrateKbps = null,
                 message = null
             )
         }
@@ -1515,6 +1702,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     override fun onDestroy() {
         cancelReconnect()
         cancelMetadataPolling()
+        stopListeningTracker()
         nextSongJob?.cancel()
         artworkJob?.cancel()
         currentArtworkBitmap = null

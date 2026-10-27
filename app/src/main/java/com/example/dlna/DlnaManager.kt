@@ -48,6 +48,9 @@ class DlnaManager(private val context: Context) {
     private val _isCasting = MutableStateFlow(false)
     val isCasting: StateFlow<Boolean> = _isCasting.asStateFlow()
 
+    private val _volume = MutableStateFlow(50)
+    val volume: StateFlow<Int> = _volume.asStateFlow()
+
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
@@ -61,6 +64,7 @@ class DlnaManager(private val context: Context) {
         private const val SSDP_HOST = "239.255.255.250"
         private const val SSDP_PORT = 1900
         private const val AV_TRANSPORT_SERVICE = "urn:schemas-upnp-org:service:AVTransport:1"
+        private const val RENDERING_CONTROL_SERVICE = "urn:schemas-upnp-org:service:RenderingControl:1"
         private const val MEDIA_RENDERER_DEVICE = "urn:schemas-upnp-org:device:MediaRenderer:1"
     }
 
@@ -194,6 +198,7 @@ class DlnaManager(private val context: Context) {
             var currentServiceType = ""
             var currentControlUrl = ""
             var avTransportControlUrl = ""
+            var renderingControlUrl = ""
 
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 when (eventType) {
@@ -234,6 +239,8 @@ class DlnaManager(private val context: Context) {
                         if (parser.name.equals("service", ignoreCase = true)) {
                             if (currentServiceType.contains("AVTransport", ignoreCase = true) && currentControlUrl.isNotBlank()) {
                                 avTransportControlUrl = currentControlUrl
+                            } else if (currentServiceType.contains("RenderingControl", ignoreCase = true) && currentControlUrl.isNotBlank()) {
+                                renderingControlUrl = currentControlUrl
                             }
                             insideService = false
                         }
@@ -245,6 +252,7 @@ class DlnaManager(private val context: Context) {
 
             if (avTransportControlUrl.isNotBlank() && friendlyName.isNotBlank()) {
                 val resolvedControlUrl = resolveUrl(locationUrl, avTransportControlUrl)
+                val resolvedRenderingControlUrl = if (renderingControlUrl.isNotBlank()) resolveUrl(locationUrl, renderingControlUrl) else null
                 val id = if (udn.isNotBlank()) udn else locationUrl
 
                 val device = DlnaDevice(
@@ -253,7 +261,8 @@ class DlnaManager(private val context: Context) {
                     modelName = modelName,
                     manufacturer = manufacturer,
                     locationUrl = locationUrl,
-                    controlUrl = resolvedControlUrl
+                    controlUrl = resolvedControlUrl,
+                    renderingControlUrl = resolvedRenderingControlUrl
                 )
 
                 _devices.update { current ->
@@ -290,10 +299,118 @@ class DlnaManager(private val context: Context) {
     var lastStreamTitle: String? = null
         private set
 
+    var lastStreamArtist: String? = null
+        private set
+
+    var lastStreamStation: String? = null
+        private set
+
+    var lastStreamArtworkUrl: String? = null
+        private set
+
+    fun getDeviceVolume(): Int = _volume.value
+
+    fun setVolumeAsync(vol: Int) {
+        scope.launch {
+            setVolume(vol)
+        }
+    }
+
+    fun adjustVolume(delta: Int) {
+        val current = _volume.value
+        val target = (current + delta).coerceIn(0, 100)
+        setVolumeAsync(target)
+    }
+
+    suspend fun fetchVolume(device: DlnaDevice? = _activeDevice.value): Int? = withContext(Dispatchers.IO) {
+        val targetDevice = device ?: return@withContext null
+        val controlUrl = targetDevice.renderingControlUrl ?: targetDevice.controlUrl
+        val soapBody = "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">" +
+                "<s:Body>" +
+                "<u:GetVolume xmlns:u=\"urn:schemas-upnp-org:service:RenderingControl:1\">" +
+                "<InstanceID>0</InstanceID>" +
+                "<Channel>Master</Channel>" +
+                "</u:GetVolume>" +
+                "</s:Body>" +
+                "</s:Envelope>"
+
+        try {
+            val mediaType = "text/xml; charset=utf-8".toMediaType()
+            val requestBody = soapBody.toRequestBody(mediaType)
+            val request = Request.Builder()
+                .url(controlUrl)
+                .addHeader("SOAPAction", "\"urn:schemas-upnp-org:service:RenderingControl:1#GetVolume\"")
+                .post(requestBody)
+                .build()
+
+            val response = httpClient.newCall(request).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string().orEmpty()
+                val match = Regex("<CurrentVolume>(\\d+)</CurrentVolume>", RegexOption.IGNORE_CASE).find(body)
+                val parsed = match?.groupValues?.get(1)?.toIntOrNull()
+                if (parsed != null) {
+                    val clamped = parsed.coerceIn(0, 100)
+                    _volume.value = clamped
+                    return@withContext clamped
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "GetVolume failed on ${targetDevice.name}: ${e.message}")
+        }
+        null
+    }
+
+    suspend fun setVolume(volume: Int, device: DlnaDevice? = _activeDevice.value): Boolean = withContext(Dispatchers.IO) {
+        val targetDevice = device ?: return@withContext false
+        val clamped = volume.coerceIn(0, 100)
+        _volume.value = clamped
+
+        val controlUrl = targetDevice.renderingControlUrl ?: targetDevice.controlUrl
+        val soapBody = "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">" +
+                "<s:Body>" +
+                "<u:SetVolume xmlns:u=\"urn:schemas-upnp-org:service:RenderingControl:1\">" +
+                "<InstanceID>0</InstanceID>" +
+                "<Channel>Master</Channel>" +
+                "<DesiredVolume>$clamped</DesiredVolume>" +
+                "</u:SetVolume>" +
+                "</s:Body>" +
+                "</s:Envelope>"
+
+        val success = sendRenderingControlSoapAction(controlUrl, "SetVolume", soapBody)
+        if (!success && targetDevice.renderingControlUrl != null && targetDevice.renderingControlUrl != targetDevice.controlUrl) {
+            sendRenderingControlSoapAction(targetDevice.controlUrl, "SetVolume", soapBody)
+        } else {
+            success
+        }
+    }
+
+    private fun sendRenderingControlSoapAction(controlUrl: String, action: String, body: String): Boolean {
+        return try {
+            val mediaType = "text/xml; charset=utf-8".toMediaType()
+            val requestBody = body.toRequestBody(mediaType)
+            val request = Request.Builder()
+                .url(controlUrl)
+                .addHeader("SOAPAction", "\"urn:schemas-upnp-org:service:RenderingControl:1#$action\"")
+                .post(requestBody)
+                .build()
+
+            val response = httpClient.newCall(request).execute()
+            response.isSuccessful
+        } catch (e: Exception) {
+            Log.w(TAG, "RenderingControl SOAP action $action failed on $controlUrl: ${e.message}")
+            false
+        }
+    }
+
     suspend fun castStream(
         device: DlnaDevice,
         streamUrl: String,
-        title: String
+        title: String,
+        artist: String = "",
+        stationName: String = "",
+        artworkUrl: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         _lastError.value = null
         try {
@@ -305,7 +422,14 @@ class DlnaManager(private val context: Context) {
                 // Ignore stop error
             }
 
-            val setUriSuccess = sendSetAvTransportUri(device.controlUrl, streamUrl, title)
+            val setUriSuccess = sendSetAvTransportUri(
+                controlUrl = device.controlUrl,
+                mediaUrl = streamUrl,
+                title = title,
+                artist = artist,
+                stationName = stationName,
+                artworkUrl = artworkUrl
+            )
             if (!setUriSuccess) {
                 _lastError.value = "Impossible de configurer le flux sur ${device.name}"
                 return@withContext false
@@ -318,6 +442,10 @@ class DlnaManager(private val context: Context) {
                 _isCasting.value = true
                 lastStreamUrl = streamUrl
                 lastStreamTitle = title
+                lastStreamArtist = artist
+                lastStreamStation = stationName
+                lastStreamArtworkUrl = artworkUrl
+                scope.launch { fetchVolume(device) }
                 return@withContext true
             } else {
                 _lastError.value = "Échec du lancement de la lecture sur ${device.name}"
@@ -332,7 +460,10 @@ class DlnaManager(private val context: Context) {
 
     suspend fun changeSource(
         streamUrl: String,
-        title: String
+        title: String,
+        artist: String = "",
+        stationName: String = "",
+        artworkUrl: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         val device = _activeDevice.value ?: return@withContext false
         Log.i(TAG, "Changing source directly on DLNA renderer ${device.name} ($streamUrl) preserving renderer URI")
@@ -346,7 +477,14 @@ class DlnaManager(private val context: Context) {
                 // Ignore stop error
             }
 
-            val setUriSuccess = sendSetAvTransportUri(device.controlUrl, streamUrl, title)
+            val setUriSuccess = sendSetAvTransportUri(
+                controlUrl = device.controlUrl,
+                mediaUrl = streamUrl,
+                title = title,
+                artist = artist,
+                stationName = stationName,
+                artworkUrl = artworkUrl
+            )
             if (!setUriSuccess) {
                 _lastError.value = "Impossible de configurer le flux sur ${device.name}"
                 return@withContext false
@@ -358,6 +496,9 @@ class DlnaManager(private val context: Context) {
                 _isCasting.value = true
                 lastStreamUrl = streamUrl
                 lastStreamTitle = title
+                lastStreamArtist = artist
+                lastStreamStation = stationName
+                lastStreamArtworkUrl = artworkUrl
                 return@withContext true
             } else {
                 delay(200)
@@ -366,6 +507,9 @@ class DlnaManager(private val context: Context) {
                     _isCasting.value = true
                     lastStreamUrl = streamUrl
                     lastStreamTitle = title
+                    lastStreamArtist = artist
+                    lastStreamStation = stationName
+                    lastStreamArtworkUrl = artworkUrl
                     return@withContext true
                 }
                 _lastError.value = "Échec du lancement de la lecture sur ${device.name}"
@@ -381,7 +525,10 @@ class DlnaManager(private val context: Context) {
     suspend fun resyncStream(
         device: DlnaDevice,
         streamUrl: String,
-        title: String
+        title: String,
+        artist: String = "",
+        stationName: String = "",
+        artworkUrl: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         Log.i(TAG, "Executing STOP -> SET_AV_TRANSPORT_URI -> PLAY on ${device.name}")
         _lastError.value = null
@@ -395,7 +542,14 @@ class DlnaManager(private val context: Context) {
             }
 
             // 2. SET_AV_TRANSPORT_URI
-            val setUriSuccess = sendSetAvTransportUri(device.controlUrl, streamUrl, title)
+            val setUriSuccess = sendSetAvTransportUri(
+                controlUrl = device.controlUrl,
+                mediaUrl = streamUrl,
+                title = title,
+                artist = artist,
+                stationName = stationName,
+                artworkUrl = artworkUrl
+            )
             if (!setUriSuccess) {
                 _lastError.value = "Impossible de reconfigurer le flux sur ${device.name}"
                 return@withContext false
@@ -410,6 +564,9 @@ class DlnaManager(private val context: Context) {
                 _isCasting.value = true
                 lastStreamUrl = streamUrl
                 lastStreamTitle = title
+                lastStreamArtist = artist
+                lastStreamStation = stationName
+                lastStreamArtworkUrl = artworkUrl
                 return@withContext true
             } else {
                 delay(200)
@@ -419,6 +576,9 @@ class DlnaManager(private val context: Context) {
                     _isCasting.value = true
                     lastStreamUrl = streamUrl
                     lastStreamTitle = title
+                    lastStreamArtist = artist
+                    lastStreamStation = stationName
+                    lastStreamArtworkUrl = artworkUrl
                     return@withContext true
                 }
                 _lastError.value = "Échec de la relance de lecture sur ${device.name}"
@@ -455,7 +615,14 @@ class DlnaManager(private val context: Context) {
         val played = sendPlay(device.controlUrl)
         if (!played && !lastStreamUrl.isNullOrBlank()) {
             Log.i(TAG, "Direct play returned false, re-applying transport URI and retrying Play")
-            sendSetAvTransportUri(device.controlUrl, lastStreamUrl!!, lastStreamTitle ?: device.name)
+            sendSetAvTransportUri(
+                controlUrl = device.controlUrl,
+                mediaUrl = lastStreamUrl!!,
+                title = lastStreamTitle ?: device.name,
+                artist = lastStreamArtist.orEmpty(),
+                stationName = lastStreamStation.orEmpty(),
+                artworkUrl = lastStreamArtworkUrl
+            )
             delay(150)
             return@withContext sendPlay(device.controlUrl)
         }
@@ -473,19 +640,48 @@ class DlnaManager(private val context: Context) {
             _isCasting.value = false
             lastStreamUrl = null
             lastStreamTitle = null
+            lastStreamArtist = null
+            lastStreamStation = null
+            lastStreamArtworkUrl = null
         }
         return@withContext true
     }
 
-    private fun sendSetAvTransportUri(controlUrl: String, mediaUrl: String, title: String): Boolean {
+    private fun sendSetAvTransportUri(
+        controlUrl: String,
+        mediaUrl: String,
+        title: String,
+        artist: String = "",
+        stationName: String = "",
+        artworkUrl: String? = null
+    ): Boolean {
         val escapedUri = escapeXml(mediaUrl)
         val escapedTitle = escapeXml(title)
+        val escapedArtist = escapeXml(artist)
+        val escapedStation = escapeXml(stationName)
+        val escapedArtwork = artworkUrl?.let { escapeXml(it) }.orEmpty()
+
+        val artistTag = if (escapedArtist.isNotBlank()) {
+            "<dc:creator>$escapedArtist</dc:creator><upnp:artist>$escapedArtist</upnp:artist>"
+        } else ""
+
+        val albumTag = if (escapedStation.isNotBlank()) {
+            "<upnp:album>$escapedStation</upnp:album><dc:description>$escapedStation</dc:description>"
+        } else ""
+
+        val artworkTag = if (escapedArtwork.isNotBlank()) {
+            "<upnp:albumArtURI>$escapedArtwork</upnp:albumArtURI>"
+        } else ""
+
         val didlMetadata = escapeXml(
             "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" " +
                     "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" " +
                     "xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">" +
                     "<item id=\"1\" parentID=\"0\" restricted=\"1\">" +
                     "<dc:title>$escapedTitle</dc:title>" +
+                    artistTag +
+                    albumTag +
+                    artworkTag +
                     "<upnp:class>object.item.audioItem.audioBroadcast</upnp:class>" +
                     "<res protocolInfo=\"http-get:*:audio/mpeg:*\">$escapedUri</res>" +
                     "</item></DIDL-Lite>"

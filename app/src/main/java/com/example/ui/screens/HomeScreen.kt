@@ -3,6 +3,8 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,8 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -41,6 +45,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material.icons.filled.SpeakerGroup
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
@@ -88,7 +93,9 @@ import com.example.service.PlaybackStatus
 import com.example.ui.LocalAppStrings
 import com.example.ui.RadioViewModel
 import com.example.ui.components.SoundWaveVisualizer
+import com.example.ui.components.StationEditDialog
 import com.example.ui.theme.LiveRed
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,12 +118,23 @@ fun HomeScreen(
 
     var showStationSelectorSheet by remember { mutableStateOf(false) }
     var showDlnaSheet by remember { mutableStateOf(false) }
+    var showCreateStationDialog by remember { mutableStateOf(false) }
+    var showBitrateBubble by remember { mutableStateOf(false) }
+
+    val scrollState = rememberScrollState()
     val sheetState = rememberModalBottomSheetState()
     val dlnaSheetState = rememberModalBottomSheetState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
     val activeStation = playerState.currentStation ?: selectedStation
+
+    LaunchedEffect(showBitrateBubble) {
+        if (showBitrateBubble) {
+            delay(3500)
+            showBitrateBubble = false
+        }
+    }
 
     LaunchedEffect(playerState.message) {
         playerState.message?.let {
@@ -219,99 +237,153 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp, vertical = 4.dp),
+                .verticalScroll(scrollState)
+                .padding(horizontal = 20.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             if (stations.isEmpty()) {
                 EmptyStationsCard(
-                    onAddStationClicked = onNavigateToSettings,
-                    modifier = Modifier.fillMaxWidth()
+                    onAddStationClicked = { showCreateStationDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 640.dp)
                 )
             } else {
-                // Carte centrale épurée du lecteur Ocarina
+                // Carte centrale épurée du lecteur Ocarina (adaptée Android TV & Mobile)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f, fill = false),
+                        .widthIn(max = 640.dp),
                     shape = RoundedCornerShape(32.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                     ),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        // Badge LIVE discret + Indicateur DLNA Stream si actif
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-                                    .padding(horizontal = 12.dp, vertical = 5.dp)
+                            // Badge LIVE discret avec bulle de débit temporaire + Indicateur DLNA Stream si actif
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (playerState.status is PlaybackStatus.Playing || isDlnaCasting) LiveRed
-                                            else MaterialTheme.colorScheme.outline
-                                        )
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = strings.liveBadge,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (playerState.status is PlaybackStatus.Playing || isDlnaCasting) LiveRed
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    letterSpacing = 1.sp
-                                )
-                            }
+                                // Bulle d'information temporaire du débit en kbps
+                                AnimatedVisibility(
+                                    visible = showBitrateBubble,
+                                    enter = fadeIn() + scaleIn(),
+                                    exit = fadeOut() + scaleOut()
+                                ) {
+                                    val kbps = playerState.bitrateKbps
+                                    val bitrateText = when {
+                                        kbps != null && kbps > 0 -> "$kbps kbps"
+                                        playerState.status is PlaybackStatus.Playing || isDlnaCasting -> strings.bitrateStandard
+                                        else -> strings.waitingPlayback
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.inverseSurface,
+                                        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                                        shadowElevation = 4.dp,
+                                        modifier = Modifier
+                                            .padding(bottom = 2.dp)
+                                            .testTag("bitrate_bubble")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Speed,
+                                                contentDescription = null,
+                                                tint = LiveRed,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = String.format(strings.bitrateBubble, bitrateText),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                    }
+                                }
 
-                            if (isDlnaCasting && activeDlnaDevice != null) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    tonalElevation = 1.dp,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable { showDlnaSheet = true }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+                                            .clickable {
+                                                showBitrateBubble = !showBitrateBubble
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 5.dp)
+                                            .testTag("live_badge")
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.SpeakerGroup,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(14.dp)
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (playerState.status is PlaybackStatus.Playing || isDlnaCasting) LiveRed
+                                                    else MaterialTheme.colorScheme.outline
+                                                )
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = activeDlnaDevice?.name ?: "DLNA Audio",
+                                            text = strings.liveBadge,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.widthIn(max = 140.dp)
+                                            color = if (playerState.status is PlaybackStatus.Playing || isDlnaCasting) LiveRed
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            letterSpacing = 1.sp
                                         )
+                                    }
+
+                                    if (isDlnaCasting && activeDlnaDevice != null) {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            tonalElevation = 1.dp,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable { showDlnaSheet = true }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.SpeakerGroup,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = activeDlnaDevice?.name ?: "DLNA Audio",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.widthIn(max = 140.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
-                        }
 
                         // Nom de la station
                         Text(
@@ -761,18 +833,19 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    // Bouton + Gérer harmonisé et aéré par rapport au titre
+                    // Bouton + Créer une station : raccourci direct vers le formulaire de création
                     FilledTonalButton(
                         onClick = {
                             showStationSelectorSheet = false
-                            onNavigateToSettings()
+                            showCreateStationDialog = true
                         },
                         shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                        modifier = Modifier.testTag("add_station_from_sheet_button")
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(strings.manage, style = MaterialTheme.typography.labelMedium)
+                        Text(strings.createStationDirect, style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
@@ -1114,6 +1187,25 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (showCreateStationDialog) {
+        StationEditDialog(
+            existingStation = null,
+            onDismiss = { showCreateStationDialog = false },
+            onSave = { name, streamUrl, changeSongUrl ->
+                viewModel.addStation(name, streamUrl, changeSongUrl) { newId ->
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("Station '$name' créée avec succès")
+                    }
+                    viewModel.playStationById(newId)
+                }
+                showCreateStationDialog = false
+            },
+            onTestStream = { testUrl ->
+                viewModel.testStreamUrl(testUrl)
+            }
+        )
     }
 }
 

@@ -99,6 +99,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        val dlnaManager = (application as RadioApp).dlnaManager
+        if (dlnaManager.isDlnaActive && dlnaManager.isCasting.value) {
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_VOLUME_UP -> {
+                    dlnaManager.adjustVolume(5)
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                    dlnaManager.adjustVolume(-5)
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

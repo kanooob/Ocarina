@@ -18,4 +18,21 @@ class ExampleRobolectricTest {
     val appName = context.getString(R.string.app_name)
     assertEquals("Ocarina", appName)
   }
+
+  @Test
+  fun `test listening time tracking in preferences`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val prefs = com.example.data.AppPreferences(context)
+    prefs.resetListeningTime()
+    assertEquals(0L, prefs.totalListeningSeconds.value)
+
+    prefs.addListeningSeconds(45L)
+    assertEquals(45L, prefs.totalListeningSeconds.value)
+
+    prefs.addListeningSeconds(60L)
+    assertEquals(105L, prefs.totalListeningSeconds.value)
+
+    prefs.resetListeningTime()
+    assertEquals(0L, prefs.totalListeningSeconds.value)
+  }
 }

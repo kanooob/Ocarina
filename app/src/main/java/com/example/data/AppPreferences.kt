@@ -40,6 +40,9 @@ class AppPreferences(context: Context) {
     private val _artworkResolution = MutableStateFlow(loadArtworkResolution())
     val artworkResolution: StateFlow<ArtworkResolution> = _artworkResolution.asStateFlow()
 
+    private val _totalListeningSeconds = MutableStateFlow(loadTotalListeningSeconds())
+    val totalListeningSeconds: StateFlow<Long> = _totalListeningSeconds.asStateFlow()
+
     private fun loadThemeMode(): ThemeMode {
         val name = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
         return try {
@@ -71,6 +74,10 @@ class AppPreferences(context: Context) {
         }
     }
 
+    private fun loadTotalListeningSeconds(): Long {
+        return prefs.getLong(KEY_TOTAL_LISTENING_SECONDS, 0L)
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
         _themeMode.value = mode
@@ -91,11 +98,29 @@ class AppPreferences(context: Context) {
         _artworkResolution.value = resolution
     }
 
+    fun addListeningSeconds(seconds: Long) {
+        val updated = _totalListeningSeconds.value + seconds
+        prefs.edit().putLong(KEY_TOTAL_LISTENING_SECONDS, updated).apply()
+        _totalListeningSeconds.value = updated
+    }
+
+    fun resetListeningTime() {
+        prefs.edit().putLong(KEY_TOTAL_LISTENING_SECONDS, 0L).apply()
+        _totalListeningSeconds.value = 0L
+    }
+
+    fun setTotalListeningSeconds(seconds: Long) {
+        val nonNegative = seconds.coerceAtLeast(0L)
+        prefs.edit().putLong(KEY_TOTAL_LISTENING_SECONDS, nonNegative).apply()
+        _totalListeningSeconds.value = nonNegative
+    }
+
     companion object {
         private const val KEY_THEME_MODE = "key_theme_mode"
         private const val KEY_LANGUAGE = "key_language"
         private const val KEY_SKIP_STREAM_RELOAD = "key_skip_stream_reload"
         private const val KEY_ARTWORK_RESOLUTION = "key_artwork_resolution"
+        private const val KEY_TOTAL_LISTENING_SECONDS = "key_total_listening_seconds"
 
         @Volatile
         private var INSTANCE: AppPreferences? = null

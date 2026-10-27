@@ -30,6 +30,15 @@ interface RadioStationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStation(station: RadioStation): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStations(stations: List<RadioStation>)
+
+    @Query("SELECT * FROM radio_stations ORDER BY createdAt ASC")
+    suspend fun getAllStationsSync(): List<RadioStation>
+
+    @Query("DELETE FROM radio_stations")
+    suspend fun deleteAllStations()
+
     @Update
     suspend fun updateStation(station: RadioStation)
 

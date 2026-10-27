@@ -19,10 +19,15 @@ object IcyMetadataExtractor {
 
     private val titlePattern = Pattern.compile("StreamTitle='(.*?)';", Pattern.CASE_INSENSITIVE)
 
-    suspend fun fetchCurrentTrackTitle(streamUrl: String): String? = withContext(Dispatchers.IO) {
+    data class StreamMetadataResult(
+        val title: String?,
+        val bitrateKbps: Int?
+    )
+
+    suspend fun fetchStreamMetadata(streamUrl: String): StreamMetadataResult = withContext(Dispatchers.IO) {
         val cleanUrl = streamUrl.trim()
         if (cleanUrl.isBlank() || (!cleanUrl.startsWith("http://", ignoreCase = true) && !cleanUrl.startsWith("https://", ignoreCase = true))) {
-            return@withContext null
+            return@withContext StreamMetadataResult(null, null)
         }
         try {
             val request = Request.Builder()
@@ -32,12 +37,17 @@ object IcyMetadataExtractor {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
+                if (!response.isSuccessful) return@withContext StreamMetadataResult(null, null)
+
+                val bitrate = response.header("icy-br")?.toIntOrNull()
+                    ?: response.header("ice-bitrate")?.toIntOrNull()
+                    ?: response.header("x-audiocast-bitrate")?.toIntOrNull()
 
                 val metaIntHeader = response.header("icy-metaint")
-                val metaInt = metaIntHeader?.toIntOrNull() ?: return@withContext response.header("icy-name")
+                val metaInt = metaIntHeader?.toIntOrNull()
+                    ?: return@withContext StreamMetadataResult(response.header("icy-name"), bitrate)
 
-                val body = response.body ?: return@withContext null
+                val body = response.body ?: return@withContext StreamMetadataResult(null, bitrate)
                 val stream: InputStream = body.byteStream()
 
                 // Skip the first block of audio bytes up to metaInt
@@ -46,7 +56,7 @@ object IcyMetadataExtractor {
                     val skipped = stream.skip(metaInt - bytesSkipped)
                     if (skipped <= 0) {
                         val b = stream.read()
-                        if (b == -1) return@withContext null
+                        if (b == -1) return@withContext StreamMetadataResult(null, bitrate)
                         bytesSkipped += 1
                     } else {
                         bytesSkipped += skipped
@@ -55,7 +65,7 @@ object IcyMetadataExtractor {
 
                 // Read metadata length byte: length = byteValue * 16
                 val lenByte = stream.read()
-                if (lenByte <= 0) return@withContext null
+                if (lenByte <= 0) return@withContext StreamMetadataResult(null, bitrate)
                 val metaLength = lenByte * 16
                 val metaBuffer = ByteArray(metaLength)
                 var bytesRead = 0
@@ -70,9 +80,10 @@ object IcyMetadataExtractor {
                 if (matcher.find()) {
                     val rawTitle = matcher.group(1)?.trim()
                     if (!rawTitle.isNullOrEmpty()) {
-                        return@withContext sanitizeTitle(rawTitle)
+                        return@withContext StreamMetadataResult(sanitizeTitle(rawTitle), bitrate)
                     }
                 }
+                return@withContext StreamMetadataResult(null, bitrate)
             }
         } catch (e: java.net.UnknownHostException) {
             Log.d(TAG, "No network connection to fetch ICY metadata")
@@ -81,7 +92,11 @@ object IcyMetadataExtractor {
         } catch (e: Exception) {
             Log.d(TAG, "Could not fetch ICY metadata: ${e.message}")
         }
-        return@withContext null
+        return@withContext StreamMetadataResult(null, null)
+    }
+
+    suspend fun fetchCurrentTrackTitle(streamUrl: String): String? {
+        return fetchStreamMetadata(streamUrl).title
     }
 
     private fun decodeMetadataBytes(buffer: ByteArray, length: Int): String {

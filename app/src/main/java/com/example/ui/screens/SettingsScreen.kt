@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.HourglassBottom
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Language
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -82,6 +84,7 @@ import com.example.data.RadioStation
 import com.example.data.ThemeMode
 import com.example.ui.LocalAppStrings
 import com.example.ui.RadioViewModel
+import com.example.ui.components.StationEditDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,10 +103,12 @@ fun SettingsScreen(
     val language by viewModel.language.collectAsStateWithLifecycle()
     val skipStreamReload by viewModel.skipStreamReload.collectAsStateWithLifecycle()
     val artworkResolution by viewModel.artworkResolution.collectAsStateWithLifecycle()
+    val totalListeningSeconds by viewModel.totalListeningSeconds.collectAsStateWithLifecycle()
 
     var showEditDialog by remember { mutableStateOf(false) }
     var stationToEdit by remember { mutableStateOf<RadioStation?>(null) }
     var stationToDelete by remember { mutableStateOf<RadioStation?>(null) }
+    var showResetListeningDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -386,7 +391,108 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 5: Information Système (Lecteur système & Matériel connecté)
+            // Section 5: Compteur de temps d'écoute cumulé
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.fillMaxWidth().testTag("listening_time_card")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.HourglassBottom,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = strings.cumulativeListeningTime,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            if (totalListeningSeconds > 0) {
+                                TextButton(
+                                    onClick = { showResetListeningDialog = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = strings.resetListeningTime,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = strings.cumulativeListeningTimeDesc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 2.dp,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Durée totale enregistrée",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = formatCumulativeDuration(totalListeningSeconds),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Schedule,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section 6: Information Système (Lecteur système & Matériel connecté)
             item {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -636,6 +742,59 @@ fun SettingsScreen(
             }
         )
     }
+
+    if (showResetListeningDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetListeningDialog = false },
+            title = {
+                Text(
+                    text = strings.resetListeningTimeConfirmTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = strings.resetListeningTimeConfirmMsg,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.resetListeningTime()
+                        showResetListeningDialog = false
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Compteur de temps d'écoute réinitialisé")
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(strings.resetListeningTime)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetListeningDialog = false }) {
+                    Text(strings.cancel)
+                }
+            }
+        )
+    }
+}
+
+private fun formatCumulativeDuration(seconds: Long): String {
+    if (seconds <= 0L) return "0 min"
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return when {
+        h > 0 -> "${h} h ${m} min ${s} s"
+        m > 0 -> "${m} min ${s} s"
+        else -> "${s} s"
+    }
 }
 
 @Composable
@@ -827,228 +986,4 @@ fun StationItemCard(
             }
         }
     }
-}
-
-@Composable
-fun StationEditDialog(
-    existingStation: RadioStation?,
-    onDismiss: () -> Unit,
-    onSave: (name: String, streamUrl: String, changeSongUrl: String) -> Unit,
-    onTestStream: suspend (String) -> Pair<Boolean, String>
-) {
-    val strings = LocalAppStrings.current
-    var name by remember { mutableStateOf(existingStation?.name ?: "") }
-    var streamUrl by remember { mutableStateOf(existingStation?.streamUrl ?: "") }
-    var changeSongUrl by remember { mutableStateOf(existingStation?.changeSongUrl ?: "") }
-
-    var isTesting by remember { mutableStateOf(false) }
-    var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
-    val coroutineScope = rememberCoroutineScope()
-
-    var nameError by remember { mutableStateOf(false) }
-    var urlError by remember { mutableStateOf(false) }
-    var urlErrorMessage by remember { mutableStateOf("") }
-
-    fun validateAndCleanStreamUrl(input: String): Pair<Boolean, String> {
-        val trimmed = input.trim()
-        if (trimmed.isBlank()) {
-            return Pair(false, "")
-        }
-        val effective = if (!trimmed.startsWith("http://", ignoreCase = true) && !trimmed.startsWith("https://", ignoreCase = true)) {
-            if (trimmed.contains(".") && !trimmed.contains(" ")) {
-                "http://$trimmed"
-            } else {
-                return Pair(false, "")
-            }
-        } else {
-            trimmed
-        }
-        return try {
-            val uri = android.net.Uri.parse(effective)
-            val scheme = uri.scheme
-            val host = uri.host
-            val isValid = (scheme.equals("http", ignoreCase = true) || scheme.equals("https", ignoreCase = true)) &&
-                    !host.isNullOrBlank() && host.contains(".") && !host.contains(" ")
-            if (isValid) Pair(true, effective) else Pair(false, "")
-        } catch (e: Exception) {
-            Pair(false, "")
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (existingStation == null) strings.addStation else strings.editStation,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = strings.cancel,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Nom de la station (Obligatoire)
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = {
-                        name = it
-                        if (nameError && it.isNotBlank()) nameError = false
-                    },
-                    label = { Text(strings.stationNameLabel) },
-                    placeholder = { Text(strings.stationNamePlaceholder) },
-                    singleLine = true,
-                    isError = nameError,
-                    supportingText = {
-                        if (nameError) Text(strings.stationNameError)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("station_name_input")
-                )
-
-                // URL du flux (Obligatoire)
-                OutlinedTextField(
-                    value = streamUrl,
-                    onValueChange = {
-                        streamUrl = it
-                        testResult = null
-                        if (urlError) urlError = false
-                    },
-                    label = { Text(strings.streamUrlLabel) },
-                    placeholder = { Text(strings.streamUrlPlaceholder) },
-                    singleLine = true,
-                    isError = urlError,
-                    supportingText = {
-                        if (urlError) {
-                            Text(urlErrorMessage.ifBlank { strings.streamUrlError })
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("stream_url_input")
-                )
-
-                // URL pour changer de musique avec espacement sous le champ
-                Column {
-                    OutlinedTextField(
-                        value = changeSongUrl,
-                        onValueChange = { changeSongUrl = it },
-                        label = { Text(strings.changeSongUrlLabel) },
-                        placeholder = { Text(strings.changeSongUrlPlaceholder) },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("change_song_url_input")
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = strings.changeSongUrlHint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // Bouton secondaire de test avec contour
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            val (canTest, cleanTestUrl) = validateAndCleanStreamUrl(streamUrl)
-                            if (canTest) {
-                                isTesting = true
-                                testResult = null
-                                coroutineScope.launch {
-                                    val result = onTestStream(cleanTestUrl)
-                                    testResult = result
-                                    isTesting = false
-                                }
-                            } else {
-                                urlError = true
-                                urlErrorMessage = if (streamUrl.isBlank()) strings.streamUrlError else strings.streamUrlInvalid
-                            }
-                        },
-                        enabled = !isTesting
-                    ) {
-                        if (isTesting) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(strings.testing)
-                        } else {
-                            Text(strings.testStream)
-                        }
-                    }
-
-                    testResult?.let { res ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (res.first) Icons.Default.CheckCircle else Icons.Default.Error,
-                                contentDescription = null,
-                                tint = if (res.first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (res.first) strings.accessible else strings.inaccessible,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (res.first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            // Bouton principal d'action plein
-            Button(
-                onClick = {
-                    val trimmedName = name.trim()
-                    val (isValidUrl, effectiveUrl) = validateAndCleanStreamUrl(streamUrl)
-                    nameError = trimmedName.isBlank()
-                    urlError = !isValidUrl
-                    if (!isValidUrl) {
-                        urlErrorMessage = if (streamUrl.isBlank()) strings.streamUrlError else strings.streamUrlInvalid
-                    }
-                    if (!nameError && !urlError) {
-                        val rawChange = changeSongUrl.trim()
-                        val effectiveChange = if (rawChange.isNotBlank() && !rawChange.startsWith("http://", ignoreCase = true) && !rawChange.startsWith("https://", ignoreCase = true)) {
-                            if (rawChange.contains(".") && !rawChange.contains(" ")) "http://$rawChange" else rawChange
-                        } else rawChange
-
-                        onSave(trimmedName, effectiveUrl, effectiveChange)
-                    }
-                },
-                modifier = Modifier.testTag("save_station_button")
-            ) {
-                Text(strings.save)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(strings.cancel)
-            }
-        }
-    )
 }
