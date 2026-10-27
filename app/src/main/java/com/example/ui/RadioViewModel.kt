@@ -134,11 +134,14 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         return ShortcutHelper.pinStationShortcut(getApplication(), station)
     }
 
+    val isDlnaActive: Boolean
+        get() = dlnaManager.isDlnaActive
+
     fun togglePlayPause() {
         val currentSelected = selectedStation.value
         val activePlaying = playerState.value.currentStation
 
-        if (activePlaying != null || dlnaManager.isCasting.value) {
+        if (activePlaying != null || dlnaManager.isDlnaActive) {
             RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_TOGGLE)
         } else if (currentSelected != null) {
             RadioPlaybackService.playStation(getApplication(), currentSelected)

@@ -51,6 +51,9 @@ class DlnaManager(private val context: Context) {
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
+    val isDlnaActive: Boolean
+        get() = _activeDevice.value != null
+
     private var scanJob: Job? = null
 
     companion object {
@@ -327,6 +330,54 @@ class DlnaManager(private val context: Context) {
         }
     }
 
+    suspend fun changeSource(
+        streamUrl: String,
+        title: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        val device = _activeDevice.value ?: return@withContext false
+        Log.i(TAG, "Changing source directly on DLNA renderer ${device.name} ($streamUrl) preserving renderer URI")
+        _lastError.value = null
+        try {
+            // Stop current playback cleanly without breaking UPnP device binding
+            try {
+                sendStop(device.controlUrl)
+                delay(150)
+            } catch (e: Exception) {
+                // Ignore stop error
+            }
+
+            val setUriSuccess = sendSetAvTransportUri(device.controlUrl, streamUrl, title)
+            if (!setUriSuccess) {
+                _lastError.value = "Impossible de configurer le flux sur ${device.name}"
+                return@withContext false
+            }
+
+            delay(100)
+            val playSuccess = sendPlay(device.controlUrl)
+            if (playSuccess) {
+                _isCasting.value = true
+                lastStreamUrl = streamUrl
+                lastStreamTitle = title
+                return@withContext true
+            } else {
+                delay(200)
+                val retryPlay = sendPlay(device.controlUrl)
+                if (retryPlay) {
+                    _isCasting.value = true
+                    lastStreamUrl = streamUrl
+                    lastStreamTitle = title
+                    return@withContext true
+                }
+                _lastError.value = "Échec du lancement de la lecture sur ${device.name}"
+                return@withContext false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error changing source on ${device.name}: ${e.message}", e)
+            _lastError.value = e.message ?: "Erreur de connexion"
+            return@withContext false
+        }
+    }
+
     suspend fun resyncStream(
         device: DlnaDevice,
         streamUrl: String,
@@ -361,6 +412,15 @@ class DlnaManager(private val context: Context) {
                 lastStreamTitle = title
                 return@withContext true
             } else {
+                delay(200)
+                val retryPlay = sendPlay(device.controlUrl)
+                if (retryPlay) {
+                    _activeDevice.value = device
+                    _isCasting.value = true
+                    lastStreamUrl = streamUrl
+                    lastStreamTitle = title
+                    return@withContext true
+                }
                 _lastError.value = "Échec de la relance de lecture sur ${device.name}"
                 return@withContext false
             }
@@ -380,6 +440,13 @@ class DlnaManager(private val context: Context) {
             sendStop(device.controlUrl)
         }
         return@withContext true
+    }
+
+    suspend fun stopPlayback(): Boolean = withContext(Dispatchers.IO) {
+        val device = _activeDevice.value ?: return@withContext false
+        Log.i(TAG, "Stopping DLNA stream on ${device.name} without dropping connection")
+        val stopped = sendStop(device.controlUrl)
+        return@withContext stopped
     }
 
     suspend fun resume(): Boolean = withContext(Dispatchers.IO) {

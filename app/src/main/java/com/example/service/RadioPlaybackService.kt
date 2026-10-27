@@ -66,6 +66,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private val dlnaManager: com.example.dlna.DlnaManager
         get() = (application as RadioApp).dlnaManager
 
+    val isDlnaActive: Boolean
+        get() = dlnaManager.isDlnaActive
+
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
@@ -163,45 +166,45 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             }
 
             override fun play() {
-                if (dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null) {
-                    resumePlayback()
+                if (isDlnaActive) {
+                    onPlay()
                 } else {
                     super.play()
                 }
             }
 
             override fun pause() {
-                if (dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null) {
-                    pausePlayback()
+                if (isDlnaActive) {
+                    onPause()
                 } else {
                     super.pause()
                 }
             }
 
             override fun stop() {
-                if (dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null) {
-                    pausePlayback()
+                if (isDlnaActive) {
+                    onStop()
                 } else {
                     super.stop()
                 }
             }
 
             override fun isPlaying(): Boolean {
-                if (dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null) {
+                if (isDlnaActive) {
                     return _playerState.value.status is PlaybackStatus.Playing
                 }
                 return super.isPlaying()
             }
 
             override fun getPlayWhenReady(): Boolean {
-                if (dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null) {
+                if (isDlnaActive) {
                     return _playerState.value.status is PlaybackStatus.Playing
                 }
                 return super.getPlayWhenReady()
             }
 
             override fun getPlaybackState(): Int {
-                if (dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null) {
+                if (isDlnaActive) {
                     return when (_playerState.value.status) {
                         is PlaybackStatus.Buffering -> Player.STATE_BUFFERING
                         is PlaybackStatus.Playing, is PlaybackStatus.Paused -> Player.STATE_READY
@@ -272,6 +275,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                         .build()
                     val availablePlayerCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
                         .add(Player.COMMAND_PLAY_PAUSE)
+                        .add(Player.COMMAND_STOP)
                         .add(Player.COMMAND_SEEK_TO_NEXT)
                         .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
                         .build()
@@ -288,23 +292,69 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     controller: MediaSession.ControllerInfo,
                     playerCommand: Int
                 ): Int {
-                    if (dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null) {
+                    if (isDlnaActive) {
                         when (playerCommand) {
                             Player.COMMAND_PLAY_PAUSE -> {
-                                togglePlayback()
-                                return SessionResult.RESULT_SUCCESS
+                                if (_playerState.value.status is PlaybackStatus.Playing) {
+                                    onPause()
+                                } else {
+                                    onPlay()
+                                }
+                                return SessionResult.RESULT_INFO_SKIPPED
+                            }
+                            Player.COMMAND_STOP -> {
+                                onStop()
+                                return SessionResult.RESULT_INFO_SKIPPED
                             }
                             Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
                                 triggerNextSong()
-                                return SessionResult.RESULT_SUCCESS
+                                return SessionResult.RESULT_INFO_SKIPPED
                             }
                         }
                     }
                     if (playerCommand == Player.COMMAND_SEEK_TO_NEXT || playerCommand == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM) {
                         triggerNextSong()
-                        return SessionResult.RESULT_SUCCESS
+                        return SessionResult.RESULT_INFO_SKIPPED
                     }
                     return super.onPlayerCommandRequest(session, controller, playerCommand)
+                }
+
+                override fun onMediaButtonEvent(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    intent: Intent
+                ): Boolean {
+                    val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                    }
+                    if (keyEvent != null && keyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                        when (keyEvent.keyCode) {
+                            android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                                onPlay()
+                                return true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                                onPause()
+                                return true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                togglePlayback()
+                                return true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_STOP -> {
+                                onStop()
+                                return true
+                            }
+                            android.view.KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                                triggerNextSong()
+                                return true
+                            }
+                        }
+                    }
+                    return super.onMediaButtonEvent(session, controller, intent)
                 }
 
                 override fun onCustomCommand(
@@ -355,11 +405,11 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         val action = intent?.action
         if (action != null) {
             when (action) {
-                ACTION_PLAY -> resumePlayback()
-                ACTION_PAUSE -> pausePlayback()
+                ACTION_PLAY -> onPlay()
+                ACTION_PAUSE -> onPause()
                 ACTION_TOGGLE -> togglePlayback()
                 ACTION_NEXT -> triggerNextSong()
-                ACTION_STOP -> stopPlaybackService()
+                ACTION_STOP -> onStop()
                 ACTION_SYNC_DLNA -> handleSyncDlna()
                 ACTION_PLAY_STATION -> {
                     val stationId = intent.getLongExtra(EXTRA_STATION_ID, -1L)
@@ -442,8 +492,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             return
         }
 
-        val isDlna = dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null
-        if (isDlna) {
+        if (isDlnaActive) {
             val activeDev = dlnaManager.activeDevice.value!!
             // Silence local phone speaker immediately
             exoPlayer?.stop()
@@ -466,7 +515,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 try {
                     val resolvedUrl = StreamUrlResolver.resolveStreamUrl(effectiveStation.streamUrl)
                     activeStreamUrl = resolvedUrl
-                    val success = dlnaManager.castStream(activeDev, resolvedUrl, effectiveStation.name)
+                    // Conserver l'URI du renderer DLNA distant lors du changement de source
+                    // et transmettre la nouvelle URL directement au renderer distant sans couper la connexion UPnP
+                    val success = dlnaManager.changeSource(resolvedUrl, effectiveStation.name)
                     if (success) {
                         hasPlayedSuccessfully = true
                         _playerState.update {
@@ -525,8 +576,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private fun handleSyncDlna() {
         exoPlayer?.stop()
         val activeDev = dlnaManager.activeDevice.value
-        val app = application as? RadioApp
-        val station = _playerState.value.currentStation ?: app?.repository?.selectedStation?.value
+        val station = _playerState.value.currentStation
         val effectiveUrl = activeStreamUrl ?: station?.streamUrl
         activeStreamUrl = effectiveUrl
 
@@ -758,7 +808,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         val state = _playerState.value
         val stationName = state.currentStation?.name ?: getString(R.string.app_name)
 
-        val isDlna = dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null
+        val isDlna = isDlnaActive
         val activeDev = dlnaManager.activeDevice.value
 
         val statusText = when {
@@ -1208,15 +1258,31 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 }
             }
 
-            val isDlna = dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null
-            if (isDlna) {
+            val shouldReloadStream = com.example.data.AppPreferences.getInstance(this@RadioPlaybackService).skipStreamReload.value
+
+            if (isDlnaActive) {
                 val activeDev = dlnaManager.activeDevice.value!!
-                // Requirement 3: Envoi explicite STOP -> SET_AV_TRANSPORT_URI -> PLAY au renderer distant
-                delay(400)
                 val resolvedUrl = StreamUrlResolver.resolveStreamUrl(currentStation.streamUrl)
                 activeStreamUrl = resolvedUrl
-                dlnaManager.resyncStream(activeDev, resolvedUrl, currentStation.name)
-                _playerState.update { it.copy(isChangingSong = false, message = "Morceau actualisé sur ${activeDev.name}") }
+
+                if (shouldReloadStream) {
+                    // Requirement 3: Envoi explicite STOP -> SET_AV_TRANSPORT_URI -> PLAY au renderer distant pour vider et resynchroniser le buffer
+                    delay(300)
+                    val resyncSuccess = dlnaManager.resyncStream(activeDev, resolvedUrl, currentStation.name)
+                    _playerState.update { 
+                        it.copy(
+                            isChangingSong = false, 
+                            message = if (resyncSuccess) "Morceau actualisé sur ${activeDev.name}" else "Échec de synchronisation sur ${activeDev.name}"
+                        ) 
+                    }
+                } else {
+                    _playerState.update { 
+                        it.copy(
+                            isChangingSong = false, 
+                            message = "Morceau suivant demandé sur ${activeDev.name}"
+                        ) 
+                    }
+                }
 
                 // Progressive polling to catch new track metadata immediately upon stream restart
                 for (pollDelay in listOf(600L, 1200L, 2200L)) {
@@ -1229,7 +1295,6 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 }
             } else {
                 // Respect user preference for active stream reload on skip
-                val shouldReloadStream = com.example.data.AppPreferences.getInstance(this@RadioPlaybackService).skipStreamReload.value
                 if (shouldReloadStream) {
                     // Immediately reload the audio stream to cut buffer lag and refresh to the new song
                     delay(400)
@@ -1262,6 +1327,51 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         }
     }
 
+    fun onPlay() {
+        Log.d(TAG, "onPlay: routing command (isDlnaActive=$isDlnaActive)")
+        if (isDlnaActive) {
+            resumePlayback()
+        } else {
+            if (exoPlayer != null && exoPlayer?.playbackState != Player.STATE_IDLE) {
+                exoPlayer?.play()
+                _playerState.update { it.copy(status = PlaybackStatus.Playing) }
+                updateForegroundNotification()
+            } else {
+                _playerState.value.currentStation?.let { playStation(it) }
+            }
+        }
+    }
+
+    fun onPause() {
+        Log.d(TAG, "onPause: routing command (isDlnaActive=$isDlnaActive)")
+        if (isDlnaActive) {
+            pausePlayback()
+        } else {
+            exoPlayer?.pause()
+            _playerState.update { it.copy(status = PlaybackStatus.Paused) }
+            updateForegroundNotification()
+        }
+    }
+
+    fun onStop() {
+        Log.d(TAG, "onStop: routing command (isDlnaActive=$isDlnaActive)")
+        if (isDlnaActive) {
+            stopDlnaPlayback()
+        } else {
+            exoPlayer?.stop()
+            _playerState.update { it.copy(status = PlaybackStatus.Paused) }
+            updateForegroundNotification()
+        }
+    }
+
+    fun stopDlnaPlayback() {
+        serviceScope.launch {
+            dlnaManager.stopPlayback()
+            _playerState.update { it.copy(status = PlaybackStatus.Paused) }
+            updateForegroundNotification()
+        }
+    }
+
     fun resumePlayback() {
         val state = _playerState.value
         val station = state.currentStation
@@ -1277,8 +1387,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             return
         }
 
-        val isDlna = dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null
-        if (isDlna) {
+        if (isDlnaActive) {
             val activeDev = dlnaManager.activeDevice.value!!
             serviceScope.launch {
                 _playerState.update { it.copy(status = PlaybackStatus.Buffering) }
@@ -1292,7 +1401,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     }
                 } else if (station != null) {
                     val resolved = activeStreamUrl ?: StreamUrlResolver.resolveStreamUrl(station.streamUrl)
-                    dlnaManager.castStream(activeDev, resolved, station.name)
+                    dlnaManager.changeSource(resolved, station.name)
                     _playerState.update { it.copy(status = PlaybackStatus.Playing) }
                 }
                 updateForegroundNotification()
@@ -1310,8 +1419,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     }
 
     fun pausePlayback() {
-        val isDlna = dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null
-        if (isDlna) {
+        if (isDlnaActive) {
             serviceScope.launch {
                 dlnaManager.pause()
                 _playerState.update { it.copy(status = PlaybackStatus.Paused) }
@@ -1326,24 +1434,23 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     }
 
     fun togglePlayback() {
-        val isDlna = dlnaManager.isCasting.value && dlnaManager.activeDevice.value != null
-        if (isDlna) {
+        if (isDlnaActive) {
             if (_playerState.value.status is PlaybackStatus.Playing) {
-                pausePlayback()
+                onPause()
             } else {
-                resumePlayback()
+                onPlay()
             }
             return
         }
 
         val player = exoPlayer
         if (player != null && player.isPlaying) {
-            pausePlayback()
+            onPause()
         } else if (player != null && (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING)) {
             if (player.playWhenReady) {
-                pausePlayback()
+                onPause()
             } else {
-                resumePlayback()
+                onPlay()
             }
         } else if (_playerState.value.status is PlaybackStatus.Reconnecting || _playerState.value.status is PlaybackStatus.NoNetwork) {
             cancelReconnect()
