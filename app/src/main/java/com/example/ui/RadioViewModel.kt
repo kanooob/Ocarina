@@ -177,18 +177,21 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 StreamUrlResolver.resolveStreamUrl(station.streamUrl)
             }
 
-            // Extraction prioritaire des métadonnées du flux en direct (titre et artiste)
-            val streamMeta = withContext(Dispatchers.IO) {
-                try {
-                    kotlinx.coroutines.withTimeoutOrNull(1200) {
-                        com.example.service.IcyMetadataExtractor.fetchStreamMetadata(resolvedUrl)
-                    }
-                } catch (e: Exception) {
-                    null
-                }
-            }
             val stateTrack = playerState.value.currentTrackTitle.takeIf { it.isNotBlank() }
             val stateArtist = playerState.value.currentTrackArtist.takeIf { it.isNotBlank() }
+
+            // Extraction prioritaire des métadonnées du flux en direct (titre et artiste) si pas déjà en mémoire
+            val streamMeta = if (stateTrack == null) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        kotlinx.coroutines.withTimeoutOrNull(2500) {
+                            com.example.service.IcyMetadataExtractor.fetchStreamMetadata(resolvedUrl)
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            } else null
 
             val rawStreamTitle = streamMeta?.title?.trim().orEmpty()
             val (parsedArtist, parsedTrack) = if (rawStreamTitle.isNotBlank()) {
@@ -201,7 +204,9 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             val finalArtist = if (parsedArtist.isNotBlank()) parsedArtist else (stateArtist ?: "")
 
             val dlnaStreamTitle = if (finalTrack.isNotBlank()) {
-                if (finalArtist.isNotBlank()) "$finalArtist - $finalTrack" else finalTrack
+                if (finalArtist.isNotBlank() && !finalTrack.contains(finalArtist, ignoreCase = true)) {
+                    "$finalArtist - $finalTrack"
+                } else finalTrack
             } else {
                 station.name
             }

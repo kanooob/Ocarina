@@ -109,7 +109,15 @@ data class Strings(
     val exportSuccess: String,
     val shareJson: String,
     val dlnaVolume: String,
-    val dlnaVolumeHint: String
+    val dlnaVolumeHint: String,
+    val copyJson: String,
+    val jsonCopied: String,
+    val pasteJsonTitle: String,
+    val pasteJsonDesc: String,
+    val pasteJsonPlaceholder: String,
+    val selectJsonFile: String,
+    val saveJsonFile: String,
+    val formatDurationDaysHoursMinutes: String
 )
 
 val FrenchStrings = Strings(
@@ -197,8 +205,9 @@ val FrenchStrings = Strings(
     cumulativeListeningTimeDesc = "Temps total passé à écouter vos radios",
     resetListeningTime = "Réinitialiser",
     resetListeningTimeConfirmTitle = "Réinitialiser le temps d'écoute",
+    resetListeningTimeConfirmMsg = "Voulez-vous vraiment réinitialiser le compteur de temps d'écoute ?",
     bitrateBubble = "Débit : %s",
-    bitrateStandard = "128 kbps (Standard)",
+    bitrateStandard = "128 kb/s (Standard)",
     createStationDirect = "Créer une station",
     dataManagementTitle = "Sauvegarde & Données (JSON)",
     dataManagementDesc = "Exportez ou importez vos stations et votre durée d'écoute globale au format JSON.",
@@ -215,7 +224,15 @@ val FrenchStrings = Strings(
     exportSuccess = "Fichier JSON exporté avec succès",
     shareJson = "Partager le fichier JSON",
     dlnaVolume = "Volume de l'appareil connecté",
-    dlnaVolumeHint = "Réglez avec les boutons physiques du téléphone ou le curseur"
+    dlnaVolumeHint = "Réglez avec les boutons de volume du téléphone ou le curseur",
+    copyJson = "Copier le JSON",
+    jsonCopied = "JSON copié dans le presse-papiers",
+    pasteJsonTitle = "Coller le code JSON",
+    pasteJsonDesc = "Collez ici le contenu JSON contenant vos stations et votre durée d'écoute.",
+    pasteJsonPlaceholder = "{\n  \"totalListeningSeconds\": ...,\n  \"stations\": [...]\n}",
+    selectJsonFile = "Sélectionner un fichier .json",
+    saveJsonFile = "Enregistrer le fichier .json",
+    formatDurationDaysHoursMinutes = "%dj %dh %dm"
 )
 
 val EnglishStrings = Strings(
@@ -303,8 +320,9 @@ val EnglishStrings = Strings(
     cumulativeListeningTimeDesc = "Total time spent listening to your radios",
     resetListeningTime = "Reset",
     resetListeningTimeConfirmTitle = "Reset listening time",
+    resetListeningTimeConfirmMsg = "Are you sure you want to reset the listening time counter?",
     bitrateBubble = "Bitrate: %s",
-    bitrateStandard = "128 kbps (Standard)",
+    bitrateStandard = "128 kb/s (Standard)",
     createStationDirect = "Create a station",
     dataManagementTitle = "Backup & Data (JSON)",
     dataManagementDesc = "Export or import your stations and total listening duration in JSON format.",
@@ -321,7 +339,15 @@ val EnglishStrings = Strings(
     exportSuccess = "JSON file exported successfully",
     shareJson = "Share JSON file",
     dlnaVolume = "Connected device volume",
-    dlnaVolumeHint = "Adjust with phone hardware volume buttons or slider"
+    dlnaVolumeHint = "Adjust with phone hardware volume buttons or slider",
+    copyJson = "Copy JSON",
+    jsonCopied = "JSON copied to clipboard",
+    pasteJsonTitle = "Paste JSON code",
+    pasteJsonDesc = "Paste here your JSON content with stations and global listening duration.",
+    pasteJsonPlaceholder = "{\n  \"totalListeningSeconds\": ...,\n  \"stations\": [...]\n}",
+    selectJsonFile = "Select a .json file",
+    saveJsonFile = "Save as .json file",
+    formatDurationDaysHoursMinutes = "%dd %dh %dm"
 )
 
 val LocalAppStrings = compositionLocalOf { FrenchStrings }
@@ -337,3 +363,16 @@ fun resolveStrings(appLanguage: AppLanguage): Strings {
         }
     }
 }
+
+fun formatCumulativeDuration(seconds: Long): String {
+    if (seconds <= 0L) return "0 s"
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return when {
+        h > 0 -> "${h} h ${m} min ${s} s"
+        m > 0 -> "${m} min ${s} s"
+        else -> "${s} s"
+    }
+}
+

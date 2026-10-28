@@ -41,11 +41,15 @@ import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material.icons.filled.SpeakerGroup
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.filled.VolumeMute
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
@@ -61,6 +65,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -92,6 +97,7 @@ import com.example.data.RadioStation
 import com.example.service.PlaybackStatus
 import com.example.ui.LocalAppStrings
 import com.example.ui.RadioViewModel
+import com.example.ui.formatCumulativeDuration
 import com.example.ui.components.SoundWaveVisualizer
 import com.example.ui.components.StationEditDialog
 import com.example.ui.theme.LiveRed
@@ -115,6 +121,7 @@ fun HomeScreen(
     val activeDlnaDevice by viewModel.activeDlnaDevice.collectAsStateWithLifecycle()
     val isDlnaCasting by viewModel.isDlnaCasting.collectAsStateWithLifecycle()
     val dlnaError by viewModel.dlnaError.collectAsStateWithLifecycle()
+    val totalListeningSeconds by viewModel.totalListeningSeconds.collectAsStateWithLifecycle()
 
     var showStationSelectorSheet by remember { mutableStateOf(false) }
     var showDlnaSheet by remember { mutableStateOf(false) }
@@ -281,7 +288,7 @@ fun HomeScreen(
                                 ) {
                                     val kbps = playerState.bitrateKbps
                                     val bitrateText = when {
-                                        kbps != null && kbps > 0 -> "$kbps kbps"
+                                        kbps != null && kbps > 0 -> "$kbps kb/s"
                                         playerState.status is PlaybackStatus.Playing || isDlnaCasting -> strings.bitrateStandard
                                         else -> strings.waitingPlayback
                                     }
@@ -311,6 +318,26 @@ fun HomeScreen(
                                                 fontWeight = FontWeight.Bold,
                                                 letterSpacing = 0.5.sp
                                             )
+                                            if (totalListeningSeconds > 0) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "•",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.6f)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.Schedule,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Text(
+                                                    text = formatCumulativeDuration(totalListeningSeconds),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -833,19 +860,19 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    // Bouton + Créer une station : raccourci direct vers le formulaire de création
-                    FilledTonalButton(
+                    // Simple icône + pour ajouter/créer une station
+                    IconButton(
                         onClick = {
                             showStationSelectorSheet = false
                             showCreateStationDialog = true
                         },
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                         modifier = Modifier.testTag("add_station_from_sheet_button")
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(strings.createStationDirect, style = MaterialTheme.typography.labelMedium)
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = strings.addStation,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
 
@@ -1038,6 +1065,101 @@ fun HomeScreen(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                // Contrôle direct du volume de l'appareil connecté si la diffusion est active
+                if (isDlnaCasting && activeDlnaDevice != null) {
+                    val currentDlnaVolume by viewModel.dlnaVolume.collectAsStateWithLifecycle()
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("dlna_volume_card")
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = when {
+                                            currentDlnaVolume == 0 -> Icons.Default.VolumeMute
+                                            currentDlnaVolume < 50 -> Icons.Default.VolumeDown
+                                            else -> Icons.Default.VolumeUp
+                                        },
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = strings.dlnaVolume,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                                Text(
+                                    text = "$currentDlnaVolume %",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    onClick = { viewModel.adjustDlnaVolume(-5) },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeDown,
+                                        contentDescription = "Volume -5",
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Slider(
+                                    value = currentDlnaVolume.toFloat(),
+                                    onValueChange = { viewModel.setDlnaVolume(it.toInt()) },
+                                    valueRange = 0f..100f,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 4.dp)
+                                        .testTag("dlna_volume_slider")
+                                )
+                                IconButton(
+                                    onClick = { viewModel.adjustDlnaVolume(5) },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeUp,
+                                        contentDescription = "Volume +5",
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = strings.dlnaVolumeHint,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                             )
                         }
                     }

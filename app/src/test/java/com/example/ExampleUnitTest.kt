@@ -64,4 +64,12 @@ class ExampleUnitTest {
     val updatedState = state.copy(bitrateKbps = 128)
     assertEquals(128, updatedState.bitrateKbps)
   }
+
+  @Test
+  fun formatCumulativeDuration_formatsCorrectly() {
+    assertEquals("0 s", com.example.ui.formatCumulativeDuration(0L))
+    assertEquals("45 s", com.example.ui.formatCumulativeDuration(45L))
+    assertEquals("2 min 15 s", com.example.ui.formatCumulativeDuration(135L))
+    assertEquals("1 h 1 min 1 s", com.example.ui.formatCumulativeDuration(3661L))
+  }
 }

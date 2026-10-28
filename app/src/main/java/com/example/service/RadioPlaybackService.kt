@@ -64,12 +64,16 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private var activeStreamUrl: String? = null
     private var notifyMetadataListener: ((MediaMetadata) -> Unit)? = null
 
+    private var playbackStartTimeMs: Long = 0L
+
     private fun startListeningTracker() {
         if (listeningTimeJob?.isActive == true) return
         listeningTimeJob = serviceScope.launch {
             while (isActive) {
                 delay(1000L)
-                if (exoPlayer?.isPlaying == true || dlnaManager.isDlnaActive) {
+                val isLocalPlaying = exoPlayer?.isPlaying == true
+                val isDlnaPlaying = dlnaManager.isDlnaActive && _playerState.value.status is PlaybackStatus.Playing
+                if (isLocalPlaying || isDlnaPlaying) {
                     com.example.data.AppPreferences.getInstance(this@RadioPlaybackService).addListeningSeconds(1L)
                 }
             }
@@ -333,6 +337,40 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     .build()
             }
 
+            private var dlnaPlaybackStartTimestamp: Long = 0L
+            private var dlnaAccumulatedPositionMs: Long = 0L
+
+            override fun getCurrentPosition(): Long {
+                if (isDlnaActive) {
+                    val isPlaying = _playerState.value.status is PlaybackStatus.Playing
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    return if (isPlaying) {
+                        if (dlnaPlaybackStartTimestamp > 0L) {
+                            dlnaAccumulatedPositionMs + (now - dlnaPlaybackStartTimestamp)
+                        } else {
+                            dlnaPlaybackStartTimestamp = now
+                            dlnaAccumulatedPositionMs
+                        }
+                    } else {
+                        dlnaPlaybackStartTimestamp = 0L
+                        dlnaAccumulatedPositionMs
+                    }
+                }
+                return super.getCurrentPosition()
+            }
+
+            override fun getContentPosition(): Long {
+                if (isDlnaActive) {
+                    return getCurrentPosition()
+                }
+                return super.getContentPosition()
+            }
+
+            fun resetDlnaPosition() {
+                dlnaPlaybackStartTimestamp = 0L
+                dlnaAccumulatedPositionMs = 0L
+            }
+
             fun notifyListenersMetadata(newMetadata: MediaMetadata) {
                 for (listener in playerListeners) {
                     try {
@@ -340,6 +378,46 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                         listener.onPlaylistMetadataChanged(newMetadata)
                     } catch (e: Exception) {
                         Log.d(TAG, "Listener metadata dispatch error: ${e.message}")
+                    }
+                }
+            }
+
+            fun notifyDeviceInfoChanged(deviceInfo: androidx.media3.common.DeviceInfo) {
+                for (listener in playerListeners) {
+                    try {
+                        listener.onDeviceInfoChanged(deviceInfo)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Listener deviceInfo error: ${e.message}")
+                    }
+                }
+            }
+
+            fun notifyDeviceVolumeChanged(volume: Int, muted: Boolean = false) {
+                for (listener in playerListeners) {
+                    try {
+                        listener.onDeviceVolumeChanged(volume, muted)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Listener deviceVolume error: ${e.message}")
+                    }
+                }
+            }
+
+            fun notifyIsPlayingChanged(isPlaying: Boolean) {
+                for (listener in playerListeners) {
+                    try {
+                        listener.onIsPlayingChanged(isPlaying)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Listener isPlaying error: ${e.message}")
+                    }
+                }
+            }
+
+            fun notifyPlaybackStateChanged(playbackState: Int) {
+                for (listener in playerListeners) {
+                    try {
+                        listener.onPlaybackStateChanged(playbackState)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Listener playbackState error: ${e.message}")
                     }
                 }
             }
@@ -482,6 +560,63 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 }
             }
         }
+
+        // Keep MediaSession DeviceInfo and volume synchronized with DLNA state
+        serviceScope.launch {
+            dlnaManager.activeDevice.collect { activeDev ->
+                val isRemote = activeDev != null
+                val devInfo = if (isRemote) {
+                    androidx.media3.common.DeviceInfo.Builder(androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE)
+                        .setMinVolume(0)
+                        .setMaxVolume(100)
+                        .build()
+                } else {
+                    androidx.media3.common.DeviceInfo.Builder(androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_LOCAL)
+                        .setMinVolume(0)
+                        .setMaxVolume(100)
+                        .build()
+                }
+                forwardingPlayer.notifyDeviceInfoChanged(devInfo)
+                if (isRemote) {
+                    forwardingPlayer.notifyDeviceVolumeChanged(dlnaManager.volume.value)
+                }
+            }
+        }
+
+        serviceScope.launch {
+            dlnaManager.volume.collect { vol ->
+                if (isDlnaActive) {
+                    forwardingPlayer.notifyDeviceVolumeChanged(vol)
+                }
+            }
+        }
+
+        // Keep listening tracker and MediaSession in sync with both phone and DLNA playback
+        serviceScope.launch {
+            _playerState.collect { state ->
+                val isPlaying = state.status is PlaybackStatus.Playing
+                if (isPlaying) {
+                    startListeningTracker()
+                } else {
+                    val isExoPlaying = exoPlayer?.isPlaying == true
+                    val isDlnaPlaying = dlnaManager.isDlnaActive && state.status is PlaybackStatus.Playing
+                    if (!isExoPlaying && !isDlnaPlaying) {
+                        stopListeningTracker()
+                    }
+                }
+
+                if (isDlnaActive) {
+                    forwardingPlayer.notifyIsPlayingChanged(isPlaying)
+                    val pState = when (state.status) {
+                        is PlaybackStatus.Buffering -> Player.STATE_BUFFERING
+                        is PlaybackStatus.Playing, is PlaybackStatus.Paused -> Player.STATE_READY
+                        is PlaybackStatus.Idle, is PlaybackStatus.NoNetwork, is PlaybackStatus.Error -> Player.STATE_IDLE
+                        else -> Player.STATE_READY
+                    }
+                    forwardingPlayer.notifyPlaybackStateChanged(pState)
+                }
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -585,13 +720,13 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             exoPlayer?.stop()
             exoPlayer?.clearMediaItems()
 
+            val previousTrack = _playerState.value.currentTrackTitle
+            val previousArtist = _playerState.value.currentTrackArtist
+
             _playerState.update {
                 it.copy(
                     currentStation = effectiveStation,
                     status = PlaybackStatus.Buffering,
-                    currentTrackTitle = "",
-                    currentTrackArtist = "",
-                    artworkUrl = null,
                     reconnectFailed = false,
                     message = "Diffusion vers ${activeDev.name}…"
                 )
@@ -603,10 +738,10 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     val resolvedUrl = StreamUrlResolver.resolveStreamUrl(effectiveStation.streamUrl)
                     activeStreamUrl = resolvedUrl
 
-                    // Résolution des métadonnées du flux en direct (titre et artiste)
+                    // Extraction prioritaire des métadonnées du flux en direct (titre et artiste)
                     val streamMeta = withContext(Dispatchers.IO) {
                         try {
-                            kotlinx.coroutines.withTimeoutOrNull(1200) {
+                            kotlinx.coroutines.withTimeoutOrNull(2500) {
                                 IcyMetadataExtractor.fetchStreamMetadata(resolvedUrl)
                             }
                         } catch (e: Exception) {
@@ -617,11 +752,14 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     val (parsedArtist, parsedTrack) = if (rawTitle.isNotBlank()) {
                         IcyMetadataExtractor.parseArtistAndTitle(rawTitle)
                     } else {
-                        Pair("", "")
+                        Pair(previousArtist, previousTrack)
                     }
                     val cleanTitle = if (parsedTrack.isNotBlank()) parsedTrack else rawTitle
+                    val effectiveDlnaArtist = if (parsedArtist.isNotBlank()) parsedArtist else previousArtist
                     val dlnaStreamTitle = if (cleanTitle.isNotBlank()) {
-                        if (parsedArtist.isNotBlank()) "$parsedArtist - $cleanTitle" else cleanTitle
+                        if (effectiveDlnaArtist.isNotBlank() && !cleanTitle.contains(effectiveDlnaArtist, ignoreCase = true)) {
+                            "$effectiveDlnaArtist - $cleanTitle"
+                        } else cleanTitle
                     } else {
                         effectiveStation.name
                     }
@@ -630,7 +768,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                         _playerState.update {
                             it.copy(
                                 currentTrackTitle = cleanTitle,
-                                currentTrackArtist = parsedArtist
+                                currentTrackArtist = effectiveDlnaArtist
                             )
                         }
                     }
@@ -639,7 +777,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     val success = dlnaManager.changeSource(
                         streamUrl = resolvedUrl,
                         title = dlnaStreamTitle,
-                        artist = parsedArtist,
+                        artist = effectiveDlnaArtist,
                         stationName = effectiveStation.name,
                         artworkUrl = _playerState.value.artworkUrl
                     )
@@ -651,6 +789,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                                 message = null
                             )
                         }
+                        startListeningTracker()
                         updateForegroundNotification()
                         startMetadataPolling(resolvedUrl)
                     } else {
@@ -712,6 +851,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 message = if (activeDev != null) "Diffusé sur ${activeDev.name}" else null
             )
         }
+        startListeningTracker()
         updateForegroundNotification()
         if (!effectiveUrl.isNullOrBlank()) {
             startMetadataPolling(effectiveUrl)
@@ -899,6 +1039,13 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         notifyMetadataListener?.invoke(updatedMetadata)
         updateForegroundNotification()
 
+        dlnaManager.updateCurrentMetadata(
+            title = cleanTitle,
+            artist = cleanArtist,
+            stationName = stationName,
+            artworkUrl = _playerState.value.artworkUrl
+        )
+
         val searchQuery = if (cleanArtist.isNotBlank()) "$cleanArtist $cleanTitle" else cleanTitle
         val resolution = com.example.data.AppPreferences.getInstance(this).artworkResolution.value
         fetchArtworkForTrack(searchQuery, cleanTitle, effectiveArtist, resolution)
@@ -1013,6 +1160,12 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
         // Actions: Toggle (Play/Pause) + Next (Skip)
         val isPlaying = state.status is PlaybackStatus.Playing
+        if (playbackStartTimeMs == 0L && isPlaying) {
+            playbackStartTimeMs = System.currentTimeMillis()
+        } else if (!isPlaying) {
+            playbackStartTimeMs = 0L
+        }
+
         val toggleIntent = Intent(this, RadioPlaybackService::class.java).apply { action = ACTION_TOGGLE }
         val togglePendingIntent = PendingIntent.getService(
             this, 101, toggleIntent,
@@ -1030,6 +1183,13 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             .setContentText(notificationText)
             .setSubText(notificationSubText)
             .setSmallIcon(R.drawable.ic_ocarina_logo)
+            .setShowWhen(isPlaying && playbackStartTimeMs > 0L)
+            .setUsesChronometer(isPlaying && playbackStartTimeMs > 0L)
+            .apply {
+                if (isPlaying && playbackStartTimeMs > 0L) {
+                    setWhen(playbackStartTimeMs)
+                }
+            }
             .setStyle(
                 MediaStyleNotificationHelper.MediaStyle(session)
                     .setShowActionsInCompactView(0, 1)
@@ -1549,6 +1709,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     fun stopDlnaPlayback() {
         serviceScope.launch {
             dlnaManager.stopPlayback()
+            stopListeningTracker()
             _playerState.update { it.copy(status = PlaybackStatus.Paused) }
             updateForegroundNotification()
         }
@@ -1577,14 +1738,31 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 val success = dlnaManager.resume()
                 if (success) {
                     _playerState.update { it.copy(status = PlaybackStatus.Playing) }
+                    startListeningTracker()
                     val currentUrl = activeStreamUrl ?: station?.streamUrl
                     if (!currentUrl.isNullOrBlank()) {
                         startMetadataPolling(currentUrl)
                     }
                 } else if (station != null) {
                     val resolved = activeStreamUrl ?: StreamUrlResolver.resolveStreamUrl(station.streamUrl)
-                    dlnaManager.changeSource(resolved, station.name)
+                    val state = _playerState.value
+                    val currentTrack = state.currentTrackTitle
+                    val currentArtist = state.currentTrackArtist
+                    val dlnaTitle = if (currentTrack.isNotBlank()) {
+                        if (currentArtist.isNotBlank() && !currentTrack.contains(currentArtist, ignoreCase = true)) {
+                            "$currentArtist - $currentTrack"
+                        } else currentTrack
+                    } else station.name
+
+                    dlnaManager.changeSource(
+                        streamUrl = resolved,
+                        title = dlnaTitle,
+                        artist = currentArtist,
+                        stationName = station.name,
+                        artworkUrl = state.artworkUrl
+                    )
                     _playerState.update { it.copy(status = PlaybackStatus.Playing) }
+                    startListeningTracker()
                 }
                 updateForegroundNotification()
             }
@@ -1594,6 +1772,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         if (exoPlayer != null && exoPlayer?.playbackState != Player.STATE_IDLE) {
             exoPlayer?.play()
             _playerState.update { it.copy(status = PlaybackStatus.Playing) }
+            startListeningTracker()
             updateForegroundNotification()
         } else if (station != null) {
             playStation(station)
@@ -1604,6 +1783,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         if (isDlnaActive) {
             serviceScope.launch {
                 dlnaManager.pause()
+                stopListeningTracker()
                 _playerState.update { it.copy(status = PlaybackStatus.Paused) }
                 updateForegroundNotification()
             }
@@ -1611,6 +1791,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         }
 
         exoPlayer?.pause()
+        stopListeningTracker()
         _playerState.update { it.copy(status = PlaybackStatus.Paused) }
         updateForegroundNotification()
     }

@@ -1,6 +1,13 @@
 package com.example.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,23 +18,31 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.HourglassBottom
@@ -40,9 +55,13 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.ui.platform.LocalContext
+import com.example.data.BackupData
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -84,6 +103,7 @@ import com.example.data.RadioStation
 import com.example.data.ThemeMode
 import com.example.ui.LocalAppStrings
 import com.example.ui.RadioViewModel
+import com.example.ui.formatCumulativeDuration
 import com.example.ui.components.StationEditDialog
 import kotlinx.coroutines.launch
 
@@ -110,8 +130,59 @@ fun SettingsScreen(
     var stationToDelete by remember { mutableStateOf<RadioStation?>(null) }
     var showResetListeningDialog by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportedJsonString by remember { mutableStateOf("") }
+    var showImportChoiceDialog by remember { mutableStateOf(false) }
+    var showPasteJsonDialog by remember { mutableStateOf(false) }
+    var pastedJsonText by remember { mutableStateOf("") }
+    var pasteJsonError by remember { mutableStateOf<String?>(null) }
+    var pendingImportData by remember { mutableStateOf<BackupData?>(null) }
+
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch {
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { os ->
+                        os.write(exportedJsonString.toByteArray(Charsets.UTF_8))
+                    }
+                    snackbarHostState.showSnackbar(strings.exportSuccess)
+                    showExportDialog = false
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("Erreur lors de l'exportation: ${e.message}")
+                }
+            }
+        }
+    }
+
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch {
+                try {
+                    val content = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        inputStream.bufferedReader(Charsets.UTF_8).readText()
+                    }
+                    if (!content.isNullOrBlank()) {
+                        val parsed = BackupData.fromJsonString(content)
+                        if (parsed.stations.isEmpty() && parsed.totalListeningSeconds == 0L) {
+                            snackbarHostState.showSnackbar("Aucune station ni durée trouvée dans le fichier JSON")
+                        } else {
+                            pendingImportData = parsed
+                            showImportChoiceDialog = false
+                        }
+                    }
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar(String.format(strings.importError, e.localizedMessage ?: "Format JSON invalide"))
+                }
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -530,7 +601,137 @@ fun SettingsScreen(
                 }
             }
 
-            // Espacement vertical aéré sous le bloc Lecteur système & Matériel connecté
+            // Section: Sauvegarde & Données (JSON)
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("data_management_card")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Storage,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = strings.dataManagementTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Text(
+                            text = strings.dataManagementDesc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        // Bouton Exporter
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable {
+                                    coroutineScope.launch {
+                                        exportedJsonString = viewModel.exportDataJson()
+                                        showExportDialog = true
+                                    }
+                                }
+                                .testTag("export_data_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FileDownload,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = strings.exportData,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = strings.exportDataDesc,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Bouton Importer
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable {
+                                    showImportChoiceDialog = true
+                                }
+                                .testTag("import_data_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FileUpload,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = strings.importData,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = strings.importDataDesc,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Espacement vertical aéré sous le bloc Données
             item {
                 Spacer(modifier = Modifier.height(10.dp))
             }
@@ -783,17 +984,274 @@ fun SettingsScreen(
             }
         )
     }
-}
 
-private fun formatCumulativeDuration(seconds: Long): String {
-    if (seconds <= 0L) return "0 min"
-    val h = seconds / 3600
-    val m = (seconds % 3600) / 60
-    val s = seconds % 60
-    return when {
-        h > 0 -> "${h} h ${m} min ${s} s"
-        m > 0 -> "${m} min ${s} s"
-        else -> "${s} s"
+    // Modal dialogue : Exporter les données
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.FileDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(strings.exportData, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Vos stations et votre durée d'écoute globale sont exportées ci-dessous :",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 180.dp)
+                    ) {
+                        Text(
+                            text = exportedJsonString,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Ocarina JSON", exportedJsonString)
+                                clipboard.setPrimaryClip(clip)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(strings.jsonCopied)
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(strings.copyJson, style = MaterialTheme.typography.labelSmall)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val sendIntent = Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TEXT, exportedJsonString)
+                                    type = "application/json"
+                                }
+                                context.startActivity(Intent.createChooser(sendIntent, strings.shareJson))
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Partager", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val fileName = "ocarina_data_${System.currentTimeMillis() / 1000}.json"
+                        createDocumentLauncher.launch(fileName)
+                    }
+                ) {
+                    Text(strings.saveJsonFile)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportDialog = false }) {
+                    Text(strings.cancel)
+                }
+            }
+        )
+    }
+
+    // Modal dialogue : Choix du mode d'importation
+    if (showImportChoiceDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportChoiceDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.FileUpload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(strings.importData, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Choisissez comment importer vos stations et votre durée d'écoute :",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            openDocumentLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(strings.selectJsonFile)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showImportChoiceDialog = false
+                            pastedJsonText = ""
+                            pasteJsonError = null
+                            showPasteJsonDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(strings.pasteJsonTitle)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showImportChoiceDialog = false }) {
+                    Text(strings.cancel)
+                }
+            }
+        )
+    }
+
+    // Modal dialogue : Coller le code JSON
+    if (showPasteJsonDialog) {
+        AlertDialog(
+            onDismissRequest = { showPasteJsonDialog = false },
+            title = {
+                Text(strings.pasteJsonTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(strings.pasteJsonDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(
+                        value = pastedJsonText,
+                        onValueChange = {
+                            pastedJsonText = it
+                            pasteJsonError = null
+                        },
+                        placeholder = { Text(strings.pasteJsonPlaceholder) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        isError = pasteJsonError != null,
+                        supportingText = pasteJsonError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        try {
+                            val parsed = BackupData.fromJsonString(pastedJsonText)
+                            if (parsed.stations.isEmpty() && parsed.totalListeningSeconds == 0L) {
+                                pasteJsonError = "Aucune station ni durée d'écoute trouvée dans ce JSON"
+                            } else {
+                                pendingImportData = parsed
+                                showPasteJsonDialog = false
+                            }
+                        } catch (e: Exception) {
+                            pasteJsonError = "JSON invalide : ${e.localizedMessage ?: "erreur de syntaxe"}"
+                        }
+                    }
+                ) {
+                    Text("Analyser")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPasteJsonDialog = false }) {
+                    Text(strings.cancel)
+                }
+            }
+        )
+    }
+
+    // Modal dialogue : Confirmation de l'application des données JSON
+    pendingImportData?.let { dataToImport ->
+        AlertDialog(
+            onDismissRequest = { pendingImportData = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(strings.importConfirmTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    val durationText = formatCumulativeDuration(dataToImport.totalListeningSeconds)
+                    Text(
+                        text = String.format(strings.importConfirmMsg, dataToImport.stations.size, durationText),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("• Stations trouvées : ${dataToImport.stations.size}", style = MaterialTheme.typography.labelMedium)
+                            Text("• Durée d'écoute : $durationText", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val count = dataToImport.stations.size
+                            coroutineScope.launch {
+                                viewModel.importData(dataToImport, replaceExisting = false)
+                                pendingImportData = null
+                                snackbarHostState.showSnackbar(String.format(strings.importSuccess, count))
+                            }
+                        }
+                    ) {
+                        Text(strings.importModeMerge)
+                    }
+                    Button(
+                        onClick = {
+                            val count = dataToImport.stations.size
+                            coroutineScope.launch {
+                                viewModel.importData(dataToImport, replaceExisting = true)
+                                pendingImportData = null
+                                snackbarHostState.showSnackbar(String.format(strings.importSuccess, count))
+                            }
+                        }
+                    ) {
+                        Text(strings.importModeReplace)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingImportData = null }) {
+                    Text(strings.cancel)
+                }
+            }
+        )
     }
 }
 

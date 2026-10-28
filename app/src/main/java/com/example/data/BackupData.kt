@@ -19,6 +19,7 @@ data class BackupData(
         root.put("version", 1)
         root.put("exportedAt", exportedAt)
         root.put("totalListeningSeconds", totalListeningSeconds)
+        root.put("dureeEcouteGlobaleSecondes", totalListeningSeconds)
 
         val stationsArray = JSONArray()
         for (station in stations) {
@@ -26,6 +27,7 @@ data class BackupData(
             stationObj.put("name", station.name)
             stationObj.put("streamUrl", station.streamUrl)
             stationObj.put("changeSongUrl", station.changeSongUrl)
+            stationObj.put("skipUrl", station.changeSongUrl)
             stationsArray.put(stationObj)
         }
         root.put("stations", stationsArray)
@@ -47,14 +49,19 @@ data class BackupData(
             val totalSeconds = when {
                 root.has("totalListeningSeconds") -> root.optLong("totalListeningSeconds", 0L)
                 root.has("total_listening_seconds") -> root.optLong("total_listening_seconds", 0L)
+                root.has("dureeEcouteGlobaleSecondes") -> root.optLong("dureeEcouteGlobaleSecondes", 0L)
+                root.has("duree_ecoute_globale") -> root.optLong("duree_ecoute_globale", 0L)
                 root.has("duree_ecoute_secondes") -> root.optLong("duree_ecoute_secondes", 0L)
+                root.has("dureeEcoute") -> root.optLong("dureeEcoute", 0L)
                 root.has("listeningSeconds") -> root.optLong("listeningSeconds", 0L)
+                root.has("listening_seconds") -> root.optLong("listening_seconds", 0L)
                 else -> 0L
             }
 
             val stationsArray = when {
                 root.has("stations") -> root.optJSONArray("stations")
                 root.has("radios") -> root.optJSONArray("radios")
+                root.has("webradios") -> root.optJSONArray("webradios")
                 else -> null
             } ?: JSONArray()
 
@@ -73,12 +80,18 @@ data class BackupData(
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
                 val name = item.optString("name").ifBlank {
-                    item.optString("nom").ifBlank { "Station ${i + 1}" }
+                    item.optString("nom").ifBlank {
+                        item.optString("stationName").ifBlank {
+                            item.optString("station_name").ifBlank { "Station ${i + 1}" }
+                        }
+                    }
                 }
                 val streamUrl = item.optString("streamUrl").ifBlank {
                     item.optString("stream_url").ifBlank {
                         item.optString("url_flux").ifBlank {
-                            item.optString("url")
+                            item.optString("urlFlux").ifBlank {
+                                item.optString("url")
+                            }
                         }
                     }
                 }
@@ -86,7 +99,9 @@ data class BackupData(
                     item.optString("change_song_url").ifBlank {
                         item.optString("skipUrl").ifBlank {
                             item.optString("skip_url").ifBlank {
-                                item.optString("url_skip")
+                                item.optString("url_skip").ifBlank {
+                                    item.optString("urlSkip")
+                                }
                             }
                         }
                     }

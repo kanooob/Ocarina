@@ -308,6 +308,18 @@ class DlnaManager(private val context: Context) {
     var lastStreamArtworkUrl: String? = null
         private set
 
+    fun updateCurrentMetadata(
+        title: String,
+        artist: String = "",
+        stationName: String = "",
+        artworkUrl: String? = null
+    ) {
+        if (title.isNotBlank()) lastStreamTitle = title
+        if (artist.isNotBlank()) lastStreamArtist = artist
+        if (stationName.isNotBlank()) lastStreamStation = stationName
+        if (!artworkUrl.isNullOrBlank()) lastStreamArtworkUrl = artworkUrl
+    }
+
     fun getDeviceVolume(): Int = _volume.value
 
     fun setVolumeAsync(vol: Int) {
@@ -655,9 +667,25 @@ class DlnaManager(private val context: Context) {
         stationName: String = "",
         artworkUrl: String? = null
     ): Boolean {
+        val effectiveTitle = when {
+            title.isNotBlank() && title != stationName -> {
+                if (artist.isNotBlank() && !title.contains(artist, ignoreCase = true)) {
+                    "$artist - $title"
+                } else {
+                    title
+                }
+            }
+            title.isNotBlank() -> title
+            stationName.isNotBlank() -> stationName
+            else -> "Ocarina Webradio"
+        }
+        val effectiveArtist = if (artist.isNotBlank()) artist else stationName
+        val effectiveAlbum = if (stationName.isNotBlank()) stationName else effectiveTitle
+
         val escapedUri = escapeXml(mediaUrl)
-        val escapedTitle = escapeXml(title)
-        val escapedArtist = escapeXml(artist)
+        val escapedTitle = escapeXml(effectiveTitle)
+        val escapedArtist = escapeXml(effectiveArtist)
+        val escapedAlbum = escapeXml(effectiveAlbum)
         val escapedStation = escapeXml(stationName)
         val escapedArtwork = artworkUrl?.let { escapeXml(it) }.orEmpty()
 
@@ -665,8 +693,8 @@ class DlnaManager(private val context: Context) {
             "<dc:creator>$escapedArtist</dc:creator><upnp:artist>$escapedArtist</upnp:artist>"
         } else ""
 
-        val albumTag = if (escapedStation.isNotBlank()) {
-            "<upnp:album>$escapedStation</upnp:album><dc:description>$escapedStation</dc:description>"
+        val albumTag = if (escapedAlbum.isNotBlank()) {
+            "<upnp:album>$escapedAlbum</upnp:album><dc:description>$escapedStation</dc:description>"
         } else ""
 
         val artworkTag = if (escapedArtwork.isNotBlank()) {
@@ -683,7 +711,7 @@ class DlnaManager(private val context: Context) {
                     albumTag +
                     artworkTag +
                     "<upnp:class>object.item.audioItem.audioBroadcast</upnp:class>" +
-                    "<res protocolInfo=\"http-get:*:audio/mpeg:*\">$escapedUri</res>" +
+                    "<res protocolInfo=\"http-get:*:audio/*:*\">$escapedUri</res>" +
                     "</item></DIDL-Lite>"
         )
 

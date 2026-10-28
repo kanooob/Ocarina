@@ -117,3 +117,38 @@ Ocarina est un lecteur de webradio minimaliste, robuste et moderne pour Android.
    - *Ajouter une station* : Marges intérieures accrues, espacement du libellé sous « Suivant », ordonnancement clair des boutons (Fermer, Tester le flux en contour, Enregistrer en plein).
 7. **Vérification & Compilation** :
    - Validation complète du build avec `compile_applet`.
+
+---
+
+## 8. Nouvelles Évolutions Validées
+
+### A. Contrôle du Volume DLNA avec les Touches du Téléphone
+- **Touches matérielles & HUD visuel** :
+  - Interception des touches physiques de volume (`VOLUME_UP`, `VOLUME_DOWN`) lorsque la diffusion DLNA est active dans l'application.
+  - Affichage instantané d'une capsule d'information flottante (HUD) en haut de l'écran avec nom de l'enceinte connectée, niveau sonore, icône dynamique et barre de progression.
+  - Déclaration de `ForwardingPlayer` Media3 en mode `PLAYBACK_TYPE_REMOTE` permettant aux commandes du système Android (écran de verrouillage, contrôles système) de modifier le volume DLNA.
+  - Synchronisation via `ContentObserver` du volume média Android vers le volume UPnP / DLNA.
+  - Contrôle visuel direct avec curseur et boutons -/+ dans la feuille de diffusion DLNA.
+
+### B. Transmission des Métadonnées du Flux au DLNA
+- **Priorité au titre et artiste** :
+  - Transmission du titre du morceau extrait du flux (`dc:title`, `upnp:artist`, `dc:creator`, `upnp:album`) dans le descripteur DIDL-Lite transmis à l'appareil DLNA (`SetAVTransportURI`).
+  - Repli automatique vers le nom de la station uniquement si aucune métadonnée n'est présente sur le flux.
+  - Mise à jour en continu à chaque nouveau morceau détecté.
+
+### C. Import / Export des Données Utilisateur en JSON
+- **Données sauvegardées** :
+  - Durée globale d'écoute cumulée (`totalListeningSeconds`, `dureeEcouteGlobaleSecondes`).
+  - Liste intégrale des stations radio avec nom, URL de flux et URL de skip (`skipUrl` / `changeSongUrl`).
+- **Options d'exportation** :
+  - Enregistrement de fichier `.json` via Storage Access Framework (`CreateDocument`).
+  - Partage standard Android vers d'autres apps.
+  - Copie dans le presse-papiers avec prévisualisation.
+- **Options d'importation** :
+  - Sélection d'un fichier `.json` via `OpenDocument`.
+  - Collage direct de texte JSON avec validation en temps réel.
+  - Boîte de dialogue de confirmation avec modes « Remplacer tout » ou « Fusionner ».
+
+### D. Améliorations de l'Interface Utilisateur (UI)
+- **Bulle d'Information de Débit** : Remplacement de « kbps » par « kb/s » dans la bulle d'information du lecteur.
+- **Sélecteur de Station** : Remplacement du bouton textuel « Créer une station » par une simple icône « + » ergonomique dans l'en-tête de la feuille modale.
