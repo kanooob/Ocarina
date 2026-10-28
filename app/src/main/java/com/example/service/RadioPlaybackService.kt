@@ -1236,6 +1236,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         } catch (e: Exception) {
             Log.w(TAG, "Error in startForeground: ${e.message}")
         }
+
+        // Synchroniser les widgets de l'écran d'accueil
+        com.example.widget.OcarinaWidgetHelper.updateWidgets(this, state, currentArtworkBitmap)
     }
 
     override fun onPlayerError(error: PlaybackException) {
@@ -1820,7 +1823,17 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             _playerState.update { it.copy(status = PlaybackStatus.Paused) }
             updateForegroundNotification()
         } else {
-            _playerState.value.currentStation?.let { playStation(it) }
+            val station = _playerState.value.currentStation
+            if (station != null) {
+                playStation(station)
+            } else {
+                serviceScope.launch {
+                    val fallback = (application as? RadioApp)?.repository?.getSelectedStationSync()
+                    if (fallback != null) {
+                        playStation(fallback)
+                    }
+                }
+            }
         }
     }
 
@@ -1870,6 +1883,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 message = null
             )
         }
+
+        com.example.widget.OcarinaWidgetHelper.updateWidgets(this)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)

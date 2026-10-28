@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_rect_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="3dp">
+
+    <!-- Fond adaptatif teinté avec la couleur dominante de l'artwork -->
+    <ImageView
+        android:id="@+id/widget_rect_background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/bg_widget_rectangle"
+        android:contentDescription="@null" />
+
+    <!-- Conteneur intérieur avec disposition horizontale équilibrée -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="10dp">
+
+        <!-- Zone principale gauche : Pochette + Titre + Artiste/Station (Clic ouvre l'app) -->
+        <LinearLayout
+            android:id="@+id/widget_rect_info_container"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- Carré pour l'artwork (ou logo par défaut) avec coins arrondis -->
+            <FrameLayout
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:background="@drawable/bg_widget_artwork_frame">
+
+                <ImageView
+                    android:id="@+id/widget_rect_artwork"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_ocarina_logo"
+                    android:contentDescription="@string/app_name" />
+            </FrameLayout>
+
+            <!-- Titre et Artiste / Station -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/widget_rect_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:text="@string/app_name"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_rect_artist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#D5E0CD"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Zone des contrôles à droite : Play/Pause (bouton principal) et Suivant -->
+        <LinearLayout
+            android:id="@+id/widget_rect_controls_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- Bouton central principal Play/Pause -->
+            <ImageButton
+                android:id="@+id/widget_rect_btn_play_pause"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_widget_circle_button"
+                android:src="@drawable/ic_widget_play"
+                android:scaleType="centerInside"
+                android:contentDescription="@string/action_play" />
+
+            <!-- Bouton Suivant (Skip) -->
+            <ImageButton
+                android:id="@+id/widget_rect_btn_next"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_widget_round_btn"
+                android:src="@drawable/ic_widget_next"
+                android:scaleType="centerInside"
+                android:contentDescription="@string/action_next" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</FrameLayout>

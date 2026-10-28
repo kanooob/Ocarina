@@ -19,4 +19,8 @@
     <string name="select_station">Choisir une station</string>
     <string name="empty_stations_title">Aucune station enregistrée</string>
     <string name="empty_stations_desc">Ajoutez votre première webradio dans les paramètres pour commencer à écouter.</string>
+    <string name="widget_circle_name">Ocarina Cercle</string>
+    <string name="widget_circle_desc">Bouton d\'écoute circulaire avec pochette d\'album et commandes rapides</string>
+    <string name="widget_rectangle_name">Ocarina Rectangle</string>
+    <string name="widget_rectangle_desc">Lecteur complet avec couleur adaptative, pochette et contrôles de lecture</string>
 </resources>

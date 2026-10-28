@@ -52,6 +52,35 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Widget 1 : Bouton d'écoute circulaire -->
+        <receiver
+            android:name=".widget.CircleRadioWidgetProvider"
+            android:label="@string/widget_circle_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="fr.galaxie.ocarina.widget.ACTION_TOGGLE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_circle_info" />
+        </receiver>
+
+        <!-- Widget 2 : Lecteur classique rectangle avec couleur adaptative -->
+        <receiver
+            android:name=".widget.RectangleRadioWidgetProvider"
+            android:label="@string/widget_rectangle_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="fr.galaxie.ocarina.widget.ACTION_TOGGLE" />
+                <action android:name="fr.galaxie.ocarina.widget.ACTION_NEXT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_rectangle_info" />
+        </receiver>
     </application>
 
 </manifest>

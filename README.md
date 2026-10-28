@@ -43,6 +43,9 @@
 ### 🎨 Design & Ergonomie (Material Design 3)
 - **Harmonie Visuelle** : Palette raffinée inspirée de l'onde sonore Ocarina (teintes sauge et olive `#889058`, contrastes profonds et surfaces douces).
 - **Animation d'Ondes Sonores** : Visualiseur animé `SoundWaveVisualizer` réactif à l'état de lecture et de buffering.
+- **Widgets pour Écran d'Accueil** :
+  - **Widget Rond (Circulaire)** : Cercle central cliquable affichant la pochette ou le logo faisant office de bouton Play/Pause pour relancer la dernière station écoutée, avec titre de la musique ou nom de station en dessous.
+  - **Widget Rectangle Classique** : Lecteur complet avec extraction automatique de la couleur dominante de la pochette pour teinter dynamiquement le fond, carré d'artwork, métadonnées (titre, artiste, station) et contrôles de lecture (Play/Pause et Suivant).
 - **Adaptabilité** : Interface fluide pour smartphones, tablettes et Android TV, respect strict des insets système (`WindowInsets`, `statusBarsPadding`).
 - **Multilingue & Thèmes** : Français et Anglais intégrés, modes Clair, Sombre ou Automatique selon le système.
 - **Raccourcis Dynamiques** : Épinglez vos stations favorites sur votre écran d'accueil Android via les raccourcis d'applications.
@@ -77,8 +80,12 @@ app/src/main/java/com/example/
 │   ├── components/             # Composants réutilisables (SoundWave, Dialogs)
 │   ├── screens/                # Écrans principaux (HomeScreen, SettingsScreen)
 │   └── theme/                  # Thème Material 3 (Color, Theme, Type)
-└── util/                       # Utilitaires
-    └── ShortcutHelper.kt       # Gestion des raccourcis Android dynamiques
+├── util/                       # Utilitaires
+│   └── ShortcutHelper.kt       # Gestion des raccourcis Android dynamiques
+└── widget/                     # Widgets Écran d'Accueil Android
+    ├── CircleRadioWidgetProvider.kt    # Widget bouton rond
+    ├── RectangleRadioWidgetProvider.kt # Widget rectangle adaptatif
+    └── OcarinaWidgetHelper.kt          # Extraction couleur dominante, crop bitmap & synchronisation
 ```
 
 ---

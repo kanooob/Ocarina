@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_circle_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="6dp">
+
+    <!-- Cercle central cliquable (Bouton principal Play / Pause) -->
+    <FrameLayout
+        android:id="@+id/widget_circle_button"
+        android:layout_width="106dp"
+        android:layout_height="106dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/bg_widget_circle">
+
+        <!-- Pochette circulaire dynamique (ou logo Ocarina par défaut) -->
+        <ImageView
+            android:id="@+id/widget_circle_artwork"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_ocarina_logo"
+            android:contentDescription="@string/app_name" />
+
+        <!-- Badge Play/Pause dynamique en bas à droite -->
+        <FrameLayout
+            android:id="@+id/widget_circle_badge"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="2dp"
+            android:background="@drawable/bg_widget_circle_button">
+
+            <ImageView
+                android:id="@+id/widget_circle_play_icon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_widget_play"
+                android:contentDescription="@string/action_play" />
+        </FrameLayout>
+    </FrameLayout>
+
+    <!-- Zone texte sous le cercle (Titre / Station) -->
+    <LinearLayout
+        android:id="@+id/widget_circle_text_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_circle_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="1.2"
+            android:shadowRadius="2.5"
+            android:text="@string/app_name"
+            android:textColor="#FFFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_circle_subtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:shadowColor="#CC000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="2"
+            android:textColor="#D5E0CD"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+</LinearLayout>

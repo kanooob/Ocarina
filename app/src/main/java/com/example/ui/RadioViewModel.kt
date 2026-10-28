@@ -69,10 +69,11 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        // Automatically sync launcher app shortcuts whenever stations are modified
+        // Automatically sync launcher app shortcuts and widgets whenever stations are modified
         viewModelScope.launch {
             repository.allStations.collect { list ->
                 ShortcutHelper.updateDynamicShortcuts(getApplication(), list)
+                com.example.widget.OcarinaWidgetHelper.updateWidgets(getApplication())
             }
         }
     }
