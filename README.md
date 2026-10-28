@@ -113,3 +113,4 @@ app/build/outputs/apk/debug/app-debug.apk
 
 Projet développé avec passion pour une expérience musicale libre et épurée.
 Ocarina © 2026.
+(Fait par IA)
