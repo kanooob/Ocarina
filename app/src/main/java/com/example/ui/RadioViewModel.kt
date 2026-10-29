@@ -304,18 +304,25 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
             val request = Request.Builder()
                 .url(resolved)
-                .header("User-Agent", "Ocarina/1.0 (VLC Compatible)")
+                .header("User-Agent", "Ocarina/2.1 (Linux; Android; VLC Compatible)")
                 .build()
 
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     val contentType = response.header("Content-Type") ?: "audio"
-                    val info = if (resolved != trimmed) "Playlist résolue ($contentType)" else "Flux accessible ($contentType)"
+                    val isTwitch = effective.contains("twitch.tv", ignoreCase = true)
+                    val info = when {
+                        isTwitch -> "Direct Twitch détecté (son uniquement)"
+                        resolved != trimmed -> "Flux résolu ($contentType)"
+                        else -> "Flux accessible ($contentType)"
+                    }
                     return@withContext Pair(true, info)
                 } else {
                     return@withContext Pair(false, "Code HTTP: ${response.code}")
                 }
             }
+        } catch (e: IllegalStateException) {
+            return@withContext Pair(false, e.message ?: "Flux non disponible")
         } catch (e: Exception) {
             return@withContext Pair(false, "Erreur: ${e.localizedMessage ?: "serveur injoignable"}")
         }

@@ -64,6 +64,32 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private var activeStreamUrl: String? = null
     private var notifyMetadataListener: ((MediaMetadata) -> Unit)? = null
 
+    // High-resolution fallback album artwork for dynamic notifications (pixel-perfect 512x512 without blurry density scaling)
+    private val defaultArtworkBitmap: android.graphics.Bitmap? by lazy {
+        try {
+            val options = android.graphics.BitmapFactory.Options().apply {
+                inScaled = false // Never downsample or blurry-scale; keep full 512x512 resolution
+                inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+            }
+            android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_default_artwork, options)
+                ?: android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_ocarina_logo, options)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private val defaultArtworkByteArray: ByteArray? by lazy {
+        defaultArtworkBitmap?.let { bmp ->
+            try {
+                val stream = java.io.ByteArrayOutputStream()
+                bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+                stream.toByteArray()
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
     private var playbackStartTimeMs: Long = 0L
 
     private fun startListeningTracker() {
@@ -140,6 +166,12 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setHandleAudioBecomingNoisy(true)
             .build()
+
+        // Critical: disable video tracks to only load and decode audio (saves data/battery on Twitch, HLS, DASH, RTSP, and video formats)
+        val audioOnlyParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
+            .build()
+        player.trackSelectionParameters = audioOnlyParameters
 
         player.addListener(this)
         exoPlayer = player
@@ -332,6 +364,11 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     .apply {
                         if (artUri != null) {
                             setArtworkUri(artUri)
+                        } else {
+                            val defaultBytes = defaultArtworkByteArray
+                            if (defaultBytes != null) {
+                                setArtworkData(defaultBytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                            }
                         }
                     }
                     .build()
@@ -660,7 +697,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         cancelReconnect()
         cancelMetadataPolling()
         artworkJob?.cancel()
-        currentArtworkBitmap = null
+        currentArtworkBitmap = defaultArtworkBitmap
         hasPlayedSuccessfully = false
 
         val rawUrl = station.streamUrl.trim()
@@ -827,9 +864,19 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
         serviceScope.launch {
             try {
-                // Smart VLC-like playlist resolution (.pls, .m3u, direct streams, hls)
+                // Smart VLC-like playlist and video stream resolution (.pls, .m3u, direct streams, hls, twitch, dash)
                 val resolvedUrl = StreamUrlResolver.resolveStreamUrl(effectiveStation.streamUrl)
                 prepareAndPlayExoPlayer(resolvedUrl, effectiveStation.name)
+            } catch (e: IllegalStateException) {
+                Log.w(TAG, "Stream resolution error: ${e.message}")
+                exoPlayer?.stop()
+                _playerState.update {
+                    it.copy(
+                        status = PlaybackStatus.Error(e.message ?: "Flux indisponible"),
+                        message = e.message ?: "Impossible de diffuser ce flux."
+                    )
+                }
+                updateForegroundNotification()
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to resolve or play station: ${e.message}")
                 handleStreamInterrupted("Flux temporairement indisponible")
@@ -1060,17 +1107,24 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         artworkJob?.cancel()
         val stationName = _playerState.value.currentStation?.name ?: getString(R.string.app_name)
 
-        val defaultArtworkUri = Uri.parse("android.resource://$packageName/${R.drawable.ic_ocarina_logo}")
+        val defaultArtworkUri = Uri.parse("android.resource://$packageName/${R.drawable.ic_default_artwork}")
 
         if (resolution == com.example.data.ArtworkResolution.DISABLED) {
-            currentArtworkBitmap = null
+            currentArtworkBitmap = defaultArtworkBitmap
             _playerState.update { it.copy(artworkUrl = null) }
             val updatedMetadata = MediaMetadata.Builder()
                 .setTitle(cleanTitle)
                 .setDisplayTitle(cleanTitle)
                 .setArtist(effectiveArtist)
                 .setStation(stationName)
-                .setArtworkUri(defaultArtworkUri)
+                .apply {
+                    val defaultBytes = defaultArtworkByteArray
+                    if (defaultBytes != null) {
+                        setArtworkData(defaultBytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    } else {
+                        setArtworkUri(defaultArtworkUri)
+                    }
+                }
                 .build()
             exoPlayer?.playlistMetadata = updatedMetadata
             notifyMetadataListener?.invoke(updatedMetadata)
@@ -1084,24 +1138,42 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
             if (!artUrl.isNullOrBlank()) {
                 val bitmap = ArtworkRepository.fetchArtworkBitmap(artUrl)
-                currentArtworkBitmap = bitmap
+                currentArtworkBitmap = bitmap ?: defaultArtworkBitmap
                 val updatedMetadata = MediaMetadata.Builder()
                     .setTitle(cleanTitle)
                     .setDisplayTitle(cleanTitle)
                     .setArtist(effectiveArtist)
                     .setStation(stationName)
-                    .setArtworkUri(Uri.parse(artUrl))
+                    .apply {
+                        setArtworkUri(Uri.parse(artUrl))
+                        if (bitmap != null) {
+                            try {
+                                val stream = java.io.ByteArrayOutputStream()
+                                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, stream)
+                                setArtworkData(stream.toByteArray(), MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                            } catch (e: Exception) {
+                                // Ignore compression failure
+                            }
+                        }
+                    }
                     .build()
                 exoPlayer?.playlistMetadata = updatedMetadata
                 notifyMetadataListener?.invoke(updatedMetadata)
             } else {
-                currentArtworkBitmap = null
+                currentArtworkBitmap = defaultArtworkBitmap
                 val updatedMetadata = MediaMetadata.Builder()
                     .setTitle(cleanTitle)
                     .setDisplayTitle(cleanTitle)
                     .setArtist(effectiveArtist)
                     .setStation(stationName)
-                    .setArtworkUri(defaultArtworkUri)
+                    .apply {
+                        val defaultBytes = defaultArtworkByteArray
+                        if (defaultBytes != null) {
+                            setArtworkData(defaultBytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                        } else {
+                            setArtworkUri(defaultArtworkUri)
+                        }
+                    }
                     .build()
                 exoPlayer?.playlistMetadata = updatedMetadata
                 notifyMetadataListener?.invoke(updatedMetadata)
@@ -1213,12 +1285,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 nextPendingIntent
             )
 
-        val defaultLogoBitmap = try {
-            android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ic_ocarina_logo)
-        } catch (e: Exception) {
-            null
-        }
-        val iconToUse = currentArtworkBitmap ?: defaultLogoBitmap
+        val iconToUse = currentArtworkBitmap ?: defaultArtworkBitmap
         if (iconToUse != null) {
             builder.setLargeIcon(iconToUse)
         }

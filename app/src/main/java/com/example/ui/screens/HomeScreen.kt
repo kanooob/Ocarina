@@ -444,26 +444,12 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.radialGradient(
-                                                colors = listOf(
-                                                    MaterialTheme.colorScheme.surfaceVariant,
-                                                    MaterialTheme.colorScheme.surface
-                                                )
-                                            )
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.ic_ocarina_logo),
-                                        contentDescription = "Ocarina",
-                                        modifier = Modifier.size(80.dp),
-                                        alpha = 0.85f
-                                    )
-                                }
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_default_artwork),
+                                    contentDescription = "Ocarina",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
                         }
 
