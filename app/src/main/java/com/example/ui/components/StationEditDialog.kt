@@ -150,6 +150,11 @@ fun StationEditDialog(
                     supportingText = {
                         if (urlError) {
                             Text(urlErrorMessage.ifBlank { strings.streamUrlError })
+                        } else if (streamUrl.contains("youtube.com", ignoreCase = true) || streamUrl.contains("youtu.be", ignoreCase = true)) {
+                            Text(
+                                text = strings.youtubeDetectedHint,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     },
                     modifier = Modifier
@@ -211,19 +216,32 @@ fun StationEditDialog(
                     }
 
                     testResult?.let { res ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (res.first) Icons.Default.CheckCircle else Icons.Default.Error,
-                                contentDescription = null,
-                                tint = if (res.first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (res.first) strings.accessible else strings.inaccessible,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (res.first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                            )
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (res.first) Icons.Default.CheckCircle else Icons.Default.Error,
+                                    contentDescription = null,
+                                    tint = if (res.first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (res.first) strings.accessible else strings.inaccessible,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (res.first) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                )
+                            }
+                            if (res.second.isNotBlank()) {
+                                Text(
+                                    text = res.second,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (res.first) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }

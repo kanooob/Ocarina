@@ -19,4 +19,8 @@
     <string name="select_station">Choose station</string>
     <string name="empty_stations_title">No stations saved</string>
     <string name="empty_stations_desc">Add your first webradio stream in settings to start listening.</string>
+    <string name="widget_circle_name">Ocarina Circle</string>
+    <string name="widget_circle_desc">Circular playback button with album artwork and quick controls</string>
+    <string name="widget_rectangle_name">Ocarina Rectangle</string>
+    <string name="widget_rectangle_desc">Full player with adaptive colors, album art and playback controls</string>
 </resources>

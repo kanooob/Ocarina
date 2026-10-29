@@ -25,6 +25,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.MediaStyleNotificationHelper
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.example.MainActivity
 import com.example.R
@@ -50,6 +51,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
@@ -618,21 +620,21 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                                 } else {
                                     onPlay()
                                 }
-                                return SessionResult.RESULT_INFO_SKIPPED
+                                return SessionError.INFO_CANCELLED
                             }
                             Player.COMMAND_STOP -> {
                                 onStop()
-                                return SessionResult.RESULT_INFO_SKIPPED
+                                return SessionError.INFO_CANCELLED
                             }
                             Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
                                 triggerNextSong()
-                                return SessionResult.RESULT_INFO_SKIPPED
+                                return SessionError.INFO_CANCELLED
                             }
                         }
                     }
                     if (playerCommand == Player.COMMAND_SEEK_TO_NEXT || playerCommand == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM) {
                         triggerNextSong()
-                        return SessionResult.RESULT_INFO_SKIPPED
+                        return SessionError.INFO_CANCELLED
                     }
                     return super.onPlayerCommandRequest(session, controller, playerCommand)
                 }
@@ -989,6 +991,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 prepareAndPlayExoPlayer(resolvedUrl, effectiveStation.name)
             } catch (e: IllegalStateException) {
                 Log.w(TAG, "Stream resolution error: ${e.message}")
+                cancelReconnect()
                 exoPlayer?.stop()
                 _playerState.update {
                     it.copy(
@@ -1483,6 +1486,21 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 it.copy(
                     status = PlaybackStatus.Error("URL invalide"),
                     message = "L'adresse du flux est invalide ou malformée."
+                )
+            }
+            updateForegroundNotification()
+            return
+        }
+
+        // Case 1b: Container or manifest parsing unsupported (e.g. HTML web page or non-stream media)
+        if (error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
+            error.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED) {
+            cancelReconnect()
+            exoPlayer?.stop()
+            _playerState.update {
+                it.copy(
+                    status = PlaybackStatus.Error("Format de flux non reconnu"),
+                    message = "Le flux audio n'est pas dans un format diffusable (M3U8, Icecast, AAC, MP3). S'il s'agit d'un lien YouTube ou web, le direct audio n'a pas pu être extrait."
                 )
             }
             updateForegroundNotification()

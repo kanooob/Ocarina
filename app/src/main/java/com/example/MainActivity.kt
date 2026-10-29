@@ -34,9 +34,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeMute
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -164,9 +165,9 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         Icon(
                                             imageVector = when {
-                                                dlnaVolume == 0 -> androidx.compose.material.icons.Icons.Default.VolumeMute
-                                                dlnaVolume < 50 -> androidx.compose.material.icons.Icons.Default.VolumeDown
-                                                else -> androidx.compose.material.icons.Icons.Default.VolumeUp
+                                                dlnaVolume == 0 -> androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeMute
+                                                dlnaVolume < 50 -> androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeDown
+                                                else -> androidx.compose.material.icons.Icons.AutoMirrored.Filled.VolumeUp
                                             },
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.inversePrimary,

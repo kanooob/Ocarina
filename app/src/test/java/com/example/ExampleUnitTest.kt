@@ -72,4 +72,14 @@ class ExampleUnitTest {
     assertEquals("2 min 15 s", com.example.ui.formatCumulativeDuration(135L))
     assertEquals("1 h 1 min 1 s", com.example.ui.formatCumulativeDuration(3661L))
   }
+
+  @Test
+  fun test_youtube_url_detection() {
+    assertTrue(com.example.service.StreamUrlResolver.isYouTubeUrl("https://www.youtube.com/watch?v=CBSlu_VMS9U"))
+    assertTrue(com.example.service.StreamUrlResolver.isYouTubeUrl("https://youtu.be/CBSlu_VMS9U"))
+    assertTrue(com.example.service.StreamUrlResolver.isYouTubeUrl("https://www.youtube.com/live/CBSlu_VMS9U"))
+    assertTrue(com.example.service.StreamUrlResolver.isYouTubeUrl("https://m.youtube.com/watch?v=CBSlu_VMS9U"))
+    assertFalse(com.example.service.StreamUrlResolver.isYouTubeUrl("https://stream.radioparadise.com/aac-320"))
+    assertFalse(com.example.service.StreamUrlResolver.isYouTubeUrl("https://twitch.tv/lofigirl"))
+  }
 }

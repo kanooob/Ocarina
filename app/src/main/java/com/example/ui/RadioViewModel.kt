@@ -310,8 +310,13 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     val contentType = response.header("Content-Type") ?: "audio"
+                    if (contentType.contains("text/html", ignoreCase = true)) {
+                        return@withContext Pair(false, "Cette adresse renvoie une page web HTML et non un flux audio compatible.")
+                    }
                     val isTwitch = effective.contains("twitch.tv", ignoreCase = true)
+                    val isYouTube = effective.contains("youtube.com", ignoreCase = true) || effective.contains("youtu.be", ignoreCase = true)
                     val info = when {
+                        isYouTube -> "Direct YouTube extrait avec succès (HLS audio)"
                         isTwitch -> "Direct Twitch détecté (son uniquement)"
                         resolved != trimmed -> "Flux résolu ($contentType)"
                         else -> "Flux accessible ($contentType)"

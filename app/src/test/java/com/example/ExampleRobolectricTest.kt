@@ -39,11 +39,21 @@ class ExampleRobolectricTest {
   @Test
   fun `test widget strings and constants`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
-    assertEquals("Ocarina Cercle", context.getString(R.string.widget_circle_name))
-    assertEquals("Ocarina Rectangle", context.getString(R.string.widget_rectangle_name))
+    val circleName = context.getString(R.string.widget_circle_name)
+    val rectangleName = context.getString(R.string.widget_rectangle_name)
+    org.junit.Assert.assertTrue(circleName == "Ocarina Circle" || circleName == "Ocarina Cercle")
+    assertEquals("Ocarina Rectangle", rectangleName)
 
     assertEquals("fr.galaxie.ocarina.widget.ACTION_TOGGLE", com.example.widget.OcarinaWidgetHelper.ACTION_TOGGLE)
     assertEquals("fr.galaxie.ocarina.widget.ACTION_NEXT", com.example.widget.OcarinaWidgetHelper.ACTION_NEXT)
+  }
+
+  @Test
+  @Config(qualifiers = "fr")
+  fun `test widget strings in french`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    assertEquals("Ocarina Cercle", context.getString(R.string.widget_circle_name))
+    assertEquals("Ocarina Rectangle", context.getString(R.string.widget_rectangle_name))
   }
 
   @Test

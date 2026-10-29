@@ -47,9 +47,9 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material.icons.filled.SpeakerGroup
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeMute
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
@@ -1081,9 +1081,9 @@ fun HomeScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = when {
-                                            currentDlnaVolume == 0 -> Icons.Default.VolumeMute
-                                            currentDlnaVolume < 50 -> Icons.Default.VolumeDown
-                                            else -> Icons.Default.VolumeUp
+                                            currentDlnaVolume == 0 -> Icons.AutoMirrored.Filled.VolumeMute
+                                            currentDlnaVolume < 50 -> Icons.AutoMirrored.Filled.VolumeDown
+                                            else -> Icons.AutoMirrored.Filled.VolumeUp
                                         },
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
@@ -1114,7 +1114,7 @@ fun HomeScreen(
                                     modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.VolumeDown,
+                                        imageVector = Icons.AutoMirrored.Filled.VolumeDown,
                                         contentDescription = "Volume -5",
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                         modifier = Modifier.size(18.dp)
@@ -1134,7 +1134,7 @@ fun HomeScreen(
                                     modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.VolumeUp,
+                                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                         contentDescription = "Volume +5",
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                         modifier = Modifier.size(18.dp)
