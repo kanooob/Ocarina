@@ -42,21 +42,41 @@ class NetworkMonitor(
         try {
             val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    Log.d(TAG, "Network is available")
+                    Log.d(TAG, "Network is available / default changed: $network")
                     onNetworkAvailable()
                 }
 
+                override fun onCapabilitiesChanged(
+                    network: Network,
+                    networkCapabilities: NetworkCapabilities
+                ) {
+                    val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    Log.d(TAG, "Network capabilities changed: hasInternet=$hasInternet")
+                    if (hasInternet) {
+                        onNetworkAvailable()
+                    }
+                }
+
                 override fun onLost(network: Network) {
-                    Log.d(TAG, "Network connection lost")
-                    onNetworkLost()
+                    Log.d(TAG, "Network connection lost: $network")
+                    // If device seamlessly switched to another active network (e.g. WiFi to 4G), signal available
+                    if (isConnected()) {
+                        Log.d(TAG, "Alternative active network connected, resuming")
+                        onNetworkAvailable()
+                    } else {
+                        onNetworkLost()
+                    }
                 }
             }
 
-            val request = NetworkRequest.Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .build()
-
-            connectivityManager.registerNetworkCallback(request, callback)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                connectivityManager.registerDefaultNetworkCallback(callback)
+            } else {
+                val request = NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build()
+                connectivityManager.registerNetworkCallback(request, callback)
+            }
             networkCallback = callback
             isRegistered = true
         } catch (e: Exception) {

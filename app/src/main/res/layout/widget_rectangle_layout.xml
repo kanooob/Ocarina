@@ -3,7 +3,7 @@
     android:id="@+id/widget_rect_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="3dp">
+    android:padding="2dp">
 
     <!-- Fond adaptatif teinté avec la couleur dominante de l'artwork -->
     <ImageView
@@ -14,14 +14,14 @@
         android:src="@drawable/bg_widget_rectangle"
         android:contentDescription="@null" />
 
-    <!-- Conteneur intérieur avec disposition horizontale équilibrée -->
+    <!-- Conteneur intérieur avec disposition horizontale compacte et adaptative (4x1 & au-delà) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="10dp">
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="4dp">
 
         <!-- Zone principale gauche : Pochette + Titre + Artiste/Station (Clic ouvre l'app) -->
         <LinearLayout
@@ -32,10 +32,10 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <!-- Carré pour l'artwork (ou logo par défaut) avec coins arrondis -->
+            <!-- Carré pour l'artwork avec coins arrondis adapté au 4x1 -->
             <FrameLayout
-                android:layout_width="64dp"
-                android:layout_height="64dp"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:background="@drawable/bg_widget_artwork_frame">
 
                 <ImageView
@@ -47,11 +47,11 @@
                     android:contentDescription="@string/app_name" />
             </FrameLayout>
 
-            <!-- Titre et Artiste / Station -->
+            <!-- Titre et Artiste / Station sur 2 lignes nettes -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="10dp"
                 android:layout_marginEnd="6dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
@@ -61,25 +61,25 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
-                    android:maxLines="2"
+                    android:maxLines="1"
                     android:text="@string/app_name"
                     android:textColor="#FFFFFFFF"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/widget_rect_artist"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
+                    android:layout_marginTop="1dp"
                     android:ellipsize="end"
                     android:maxLines="1"
                     android:textColor="#D5E0CD"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Zone des contrôles à droite : Play/Pause (bouton principal) et Suivant -->
+        <!-- Zone des contrôles à droite : Play/Pause et Suivant -->
         <LinearLayout
             android:id="@+id/widget_rect_controls_container"
             android:layout_width="wrap_content"
@@ -87,22 +87,22 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <!-- Bouton central principal Play/Pause -->
+            <!-- Bouton central principal Play/Pause (40dp) -->
             <ImageButton
                 android:id="@+id/widget_rect_btn_play_pause"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:background="@drawable/bg_widget_circle_button"
                 android:src="@drawable/ic_widget_play"
                 android:scaleType="centerInside"
                 android:contentDescription="@string/action_play" />
 
-            <!-- Bouton Suivant (Skip) -->
+            <!-- Bouton Suivant (Skip) (34dp) -->
             <ImageButton
                 android:id="@+id/widget_rect_btn_next"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginStart="8dp"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="6dp"
                 android:background="@drawable/bg_widget_round_btn"
                 android:src="@drawable/ic_widget_next"
                 android:scaleType="centerInside"
@@ -112,3 +112,4 @@
     </LinearLayout>
 
 </FrameLayout>
+

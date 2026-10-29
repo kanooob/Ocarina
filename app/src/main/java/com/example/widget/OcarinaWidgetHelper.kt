@@ -100,38 +100,50 @@ object OcarinaWidgetHelper {
                     }
                 }
 
-                // Titre et sous-titre
-                val trackTitle = state.currentTrackTitle.trim()
+                // Résolution propre des métadonnées (morceau ou station choisie)
+                val rawTrackTitle = state.currentTrackTitle.trim()
                 val stationName = state.currentStation?.name?.trim()
                     ?: fallbackStation?.name?.trim()
                     ?: appContext.getString(R.string.app_name)
 
-                val displayTitle = if (trackTitle.isNotBlank()) trackTitle else stationName
-                val displaySubtitle = when {
-                    state.currentTrackArtist.isNotBlank() -> state.currentTrackArtist.trim()
-                    trackTitle.isNotBlank() -> stationName
-                    else -> appContext.getString(R.string.app_name)
-                }
+                val streamUrl = state.currentStation?.streamUrl ?: fallbackStation?.streamUrl
+                val hasMetadata = rawTrackTitle.isNotBlank() && 
+                                  !rawTrackTitle.equals(stationName, ignoreCase = true) &&
+                                  !com.example.service.IcyMetadataExtractor.isStreamPathOrFilename(rawTrackTitle, streamUrl)
 
                 val appWidgetManager = AppWidgetManager.getInstance(appContext) ?: return@launch
 
-                // 1. Mise à jour du widget Circulaire
+                // 1. Mise à jour du widget Circulaire :
+                // Quand pas de metadata -> nom choisi de la station (jamais la fin de l'url)
+                val circleSingleLineText = if (hasMetadata) rawTrackTitle else stationName
                 updateCircleWidgetsInternal(
                     appContext,
                     appWidgetManager,
                     rawBitmap,
-                    displayTitle,
-                    displaySubtitle,
-                    isPlaying
+                    circleSingleLineText
                 )
 
-                // 2. Mise à jour du widget Rectangle
+                // 2. Mise à jour du widget Rectangle :
+                // Quand pas de metadata -> titre : nom de station choisi, sous-titre : nom de l'application
+                val rectTitle: String
+                val rectSubtitle: String
+                if (hasMetadata) {
+                    rectTitle = rawTrackTitle
+                    rectSubtitle = when {
+                        state.currentTrackArtist.isNotBlank() -> state.currentTrackArtist.trim()
+                        else -> stationName
+                    }
+                } else {
+                    rectTitle = stationName
+                    rectSubtitle = appContext.getString(R.string.app_name)
+                }
+
                 updateRectangleWidgetsInternal(
                     appContext,
                     appWidgetManager,
                     rawBitmap,
-                    displayTitle,
-                    displaySubtitle,
+                    rectTitle,
+                    rectSubtitle,
                     isPlaying
                 )
 
@@ -141,57 +153,52 @@ object OcarinaWidgetHelper {
         }
     }
 
-    private fun updateCircleWidgetsInternal(
-        context: Context,
-        appWidgetManager: AppWidgetManager,
-        artwork: Bitmap,
-        title: String,
-        subtitle: String,
-        isPlaying: Boolean
-    ) {
-        val circleComponent = ComponentName(context, CircleRadioWidgetProvider::class.java)
-        val appWidgetIds = appWidgetManager.getAppWidgetIds(circleComponent)
-        if (appWidgetIds.isEmpty()) return
+private fun updateCircleWidgetsInternal(
+    context: Context,
+    appWidgetManager: AppWidgetManager,
+    artwork: Bitmap,
+    singleLineText: String
+) {
+    val circleComponent = ComponentName(context, CircleRadioWidgetProvider::class.java)
+    val appWidgetIds = appWidgetManager.getAppWidgetIds(circleComponent)
+    if (appWidgetIds.isEmpty()) return
 
-        val circularArtwork = createCircularBitmap(artwork)
-        val views = RemoteViews(context.packageName, R.layout.widget_circle_layout).apply {
-            setImageViewBitmap(R.id.widget_circle_artwork, circularArtwork)
-            setImageViewResource(
-                R.id.widget_circle_play_icon,
-                if (isPlaying) R.drawable.ic_widget_pause else R.drawable.ic_widget_play
-            )
-            setTextViewText(R.id.widget_circle_title, title)
-            setTextViewText(R.id.widget_circle_subtitle, subtitle)
+    val circularArtwork = createCircularBitmap(artwork)
+    val views = RemoteViews(context.packageName, R.layout.widget_circle_layout).apply {
+        setImageViewBitmap(R.id.widget_circle_artwork, circularArtwork)
+        setTextViewText(R.id.widget_circle_title, singleLineText)
 
-            // Clic sur le cercle central -> Toggle Play / Pause
-            val toggleIntent = Intent(context, CircleRadioWidgetProvider::class.java).apply {
-                action = ACTION_TOGGLE
-            }
-            val togglePendingIntent = PendingIntent.getBroadcast(
-                context,
-                REQUEST_CODE_TOGGLE_CIRCLE,
-                toggleIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            setOnClickPendingIntent(R.id.widget_circle_button, togglePendingIntent)
-
-            // Clic sur le texte en dessous -> Ouvre MainActivity
-            val openIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val openPendingIntent = PendingIntent.getActivity(
-                context,
-                REQUEST_CODE_OPEN_CIRCLE,
-                openIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            setOnClickPendingIntent(R.id.widget_circle_text_container, openPendingIntent)
+        // Clic sur le cercle central et l'artwork -> Toggle Play / Pause
+        val toggleIntent = Intent(context, CircleRadioWidgetProvider::class.java).apply {
+            action = ACTION_TOGGLE
         }
+        val togglePendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_TOGGLE_CIRCLE,
+            toggleIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        setOnClickPendingIntent(R.id.widget_circle_button, togglePendingIntent)
+        setOnClickPendingIntent(R.id.widget_circle_artwork, togglePendingIntent)
 
-        for (id in appWidgetIds) {
-            appWidgetManager.updateAppWidget(id, views)
+        // Clic sur le texte en dessous -> Ouvre MainActivity
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
+        val openPendingIntent = PendingIntent.getActivity(
+            context,
+            REQUEST_CODE_OPEN_CIRCLE,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        setOnClickPendingIntent(R.id.widget_circle_text_container, openPendingIntent)
+        setOnClickPendingIntent(R.id.widget_circle_title, openPendingIntent)
     }
+
+    for (id in appWidgetIds) {
+        appWidgetManager.updateAppWidget(id, views)
+    }
+}
 
     private fun updateRectangleWidgetsInternal(
         context: Context,

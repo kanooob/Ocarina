@@ -43,6 +43,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.media.AudioAttributes as AndroidAudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -53,6 +56,11 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private var exoPlayer: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
     private lateinit var networkMonitor: NetworkMonitor
+
+    private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var wasPlayingBeforeFocusLoss = false
+    private var wasPlayingBeforeInterruption = false
 
     private var reconnectJob: Job? = null
     private var metadataJob: Job? = null
@@ -122,6 +130,114 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                Log.i(TAG, "AudioFocus LOSS: another app is playing media")
+                val isPlaying = _playerState.value.status is PlaybackStatus.Playing ||
+                                _playerState.value.status is PlaybackStatus.Buffering ||
+                                exoPlayer?.isPlaying == true
+                if (isPlaying) {
+                    wasPlayingBeforeFocusLoss = true
+                    exoPlayer?.pause()
+                    _playerState.update { 
+                        it.copy(
+                            status = PlaybackStatus.Paused,
+                            message = "En pause (autre média en cours d'écoute)"
+                        ) 
+                    }
+                    updateForegroundNotification()
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                Log.i(TAG, "AudioFocus LOSS_TRANSIENT: phone call or priority audio interruption")
+                val isPlaying = _playerState.value.status is PlaybackStatus.Playing ||
+                                _playerState.value.status is PlaybackStatus.Buffering ||
+                                exoPlayer?.isPlaying == true
+                if (isPlaying) {
+                    wasPlayingBeforeFocusLoss = true
+                    exoPlayer?.pause()
+                    _playerState.update { 
+                        it.copy(
+                            status = PlaybackStatus.Paused,
+                            message = "En pause (appel téléphonique en cours)"
+                        ) 
+                    }
+                    updateForegroundNotification()
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                Log.d(TAG, "AudioFocus LOSS_TRANSIENT_CAN_DUCK: ducking volume")
+                if (exoPlayer?.isPlaying == true) {
+                    exoPlayer?.volume = 0.2f
+                }
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                Log.i(TAG, "AudioFocus GAIN: call or other media finished (wasPlayingBeforeFocusLoss=$wasPlayingBeforeFocusLoss)")
+                exoPlayer?.volume = 1.0f
+                if (wasPlayingBeforeFocusLoss) {
+                    wasPlayingBeforeFocusLoss = false
+                    val station = _playerState.value.currentStation
+                    if (station != null) {
+                        _playerState.update {
+                            it.copy(
+                                status = PlaybackStatus.Buffering,
+                                message = "Reprise automatique de la radio…"
+                            )
+                        }
+                        updateForegroundNotification()
+                        playStation(station)
+                    } else {
+                        resumePlayback()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val playbackAttributes = AndroidAudioAttributes.Builder()
+                    .setUsage(AndroidAudioAttributes.USAGE_MEDIA)
+                    .setContentType(AndroidAudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(playbackAttributes)
+                    .setAcceptsDelayedFocusGain(true)
+                    .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                    .build()
+                audioFocusRequest = focusRequest
+                audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(
+                    audioFocusChangeListener,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN
+                ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not request audio focus: ${e.message}")
+            true
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        wasPlayingBeforeFocusLoss = false
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+                audioFocusRequest = null
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(audioFocusChangeListener)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not abandon audio focus: ${e.message}")
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
 
@@ -148,7 +264,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             .setReadTimeoutMs(10000)
             .setAllowCrossProtocolRedirects(true)
 
-        val loadErrorHandlingPolicy = DefaultLoadErrorHandlingPolicy(/* minimumLoadableRetryCount= */ 1)
+        val loadErrorHandlingPolicy = DefaultLoadErrorHandlingPolicy(/* minimumLoadableRetryCount= */ 4)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(this)
             .setDataSourceFactory(httpDataSourceFactory)
@@ -161,7 +277,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
-                /* handleAudioFocus= */ true
+                /* handleAudioFocus= */ false
             )
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setHandleAudioBecomingNoisy(true)
@@ -694,6 +810,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     }
 
     fun playStation(station: RadioStation) {
+        requestAudioFocus()
+        wasPlayingBeforeFocusLoss = false
+        wasPlayingBeforeInterruption = false
         cancelReconnect()
         cancelMetadataPolling()
         artworkJob?.cancel()
@@ -736,6 +855,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
         // Verify network availability before trying to connect
         if (!networkMonitor.isConnected()) {
+            wasPlayingBeforeInterruption = true
             exoPlayer?.stop()
             _playerState.update {
                 it.copy(
@@ -1050,18 +1170,30 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
     override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
         // Built-in Icecast/Shoutcast ICY metadata extraction from stream
-        val streamTitle = mediaMetadata.title?.toString()
-        if (!streamTitle.isNullOrBlank() && streamTitle != _playerState.value.currentStation?.name) {
+        val streamTitle = mediaMetadata.title?.toString()?.trim()
+        val currentStation = _playerState.value.currentStation
+        val currentUrl = activeStreamUrl ?: currentStation?.streamUrl
+        if (!streamTitle.isNullOrBlank() && 
+            streamTitle != currentStation?.name &&
+            !IcyMetadataExtractor.isStreamPathOrFilename(streamTitle, currentUrl)) {
             updateTrackTitle(streamTitle)
         }
     }
 
     private fun updateTrackTitle(rawTitle: String) {
+        val currentStation = _playerState.value.currentStation
+        val currentUrl = activeStreamUrl ?: currentStation?.streamUrl
+        if (IcyMetadataExtractor.isStreamPathOrFilename(rawTitle, currentUrl)) {
+            return
+        }
+
         val (parsedArtist, parsedTitle) = IcyMetadataExtractor.parseArtistAndTitle(rawTitle)
         val cleanTitle = if (parsedTitle.isNotBlank()) parsedTitle else IcyMetadataExtractor.sanitizeTitle(rawTitle)
         val cleanArtist = parsedArtist.trim()
 
         if (cleanTitle.isBlank() || 
+            IcyMetadataExtractor.isStreamPathOrFilename(cleanTitle, currentUrl) ||
+            cleanTitle.equals(currentStation?.name, ignoreCase = true) ||
             (cleanTitle == _playerState.value.currentTrackTitle && cleanArtist == _playerState.value.currentTrackArtist)) {
             return
         }
@@ -1359,18 +1491,24 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
         val isConnected = networkMonitor.isConnected()
 
-        // Case 2: Device is offline or DNS resolution failed because device has no internet
+        // Case 2: Device is offline or DNS resolution failed because device has no internet / during handover
         if (!isConnected || isUnknownHost) {
-            Log.i(TAG, "Gracefully handling device offline state (connected=$isConnected, isUnknownHost=$isUnknownHost)")
+            Log.i(TAG, "Device offline or DNS handover (connected=$isConnected, isUnknownHost=$isUnknownHost)")
+            if (hasPlayedSuccessfully || wasPlayingBeforeInterruption || _playerState.value.status is PlaybackStatus.Playing) {
+                wasPlayingBeforeInterruption = true
+            }
             cancelReconnect()
             exoPlayer?.stop()
             _playerState.update {
                 it.copy(
                     status = PlaybackStatus.NoNetwork,
-                    message = "Aucune connexion Internet. En attente du réseau…"
+                    message = "En attente du réseau Internet…"
                 )
             }
             updateForegroundNotification()
+            _playerState.value.currentStation?.let { station ->
+                startReconnectWatchdog(station)
+            }
             return
         }
 
@@ -1410,9 +1548,10 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             return
         }
 
-        // Case 5: Stream was previously playing and was suddenly interrupted/timed out
-        if (hasPlayedSuccessfully) {
-            handleStreamInterrupted("Flux interrompu")
+        // Case 5: Stream was previously playing and was suddenly interrupted/timed out (e.g. 4G antenna handover or micro-cut)
+        if (hasPlayedSuccessfully || wasPlayingBeforeInterruption || _playerState.value.status is PlaybackStatus.Playing) {
+            wasPlayingBeforeInterruption = true
+            handleStreamInterrupted("Micro-coupure réseau détectée, reconnexion…")
         } else {
             // Initial playback failed without explicit connection refused
             cancelReconnect()
@@ -1446,9 +1585,16 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private fun handleNetworkRestored() {
         val state = _playerState.value
         val station = state.currentStation ?: return
-        Log.i(TAG, "Network restored, checking active station ${station.name}")
+        Log.i(TAG, "Network restored, checking active station ${station.name} (wasInterrupted=$wasPlayingBeforeInterruption, status=${state.status})")
 
-        if (state.status is PlaybackStatus.NoNetwork || state.status is PlaybackStatus.Reconnecting) {
+        if (wasPlayingBeforeInterruption ||
+            state.status is PlaybackStatus.NoNetwork ||
+            state.status is PlaybackStatus.Reconnecting ||
+            state.status is PlaybackStatus.Buffering ||
+            state.status is PlaybackStatus.Error) {
+
+            wasPlayingBeforeInterruption = false
+            cancelReconnect()
             _playerState.update {
                 it.copy(
                     status = PlaybackStatus.Buffering,
@@ -1463,17 +1609,25 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     private fun handleNetworkLost() {
         Log.i(TAG, "Network lost, pausing active player")
         val state = _playerState.value
-        if (state.status is PlaybackStatus.Playing || state.status is PlaybackStatus.Buffering || state.status is PlaybackStatus.Reconnecting) {
-            cancelReconnect()
+        val isCurrentlyPlaying = state.status is PlaybackStatus.Playing ||
+                                 state.status is PlaybackStatus.Buffering ||
+                                 state.status is PlaybackStatus.Reconnecting ||
+                                 exoPlayer?.isPlaying == true
+
+        if (isCurrentlyPlaying) {
+            wasPlayingBeforeInterruption = true
             cancelMetadataPolling()
             exoPlayer?.stop()
             _playerState.update {
                 it.copy(
                     status = PlaybackStatus.NoNetwork,
-                    message = "Connexion Internet perdue. En attente du réseau…"
+                    message = "Connexion Internet perdue. Reprise automatique dès le retour du réseau…"
                 )
             }
             updateForegroundNotification()
+            state.currentStation?.let { station ->
+                startReconnectWatchdog(station)
+            }
         }
     }
 
@@ -1487,7 +1641,19 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             while (isActive && elapsed < totalSeconds) {
                 val remaining = totalSeconds - elapsed
 
-                // Check connectivity BEFORE calling ExoPlayer to prevent UnknownHostException log spam
+                // Fast responsive retry: 800ms for first attempt (micro-cut / antenna handover), then progressive
+                val waitDelay = when (failedConsecutiveAttempts) {
+                    0 -> 800L
+                    1 -> 1500L
+                    2 -> 2500L
+                    else -> 4000L
+                }
+                delay(waitDelay)
+                elapsed += (waitDelay / 1000).toInt().coerceAtLeast(1)
+
+                if (!isActive) break
+
+                // Check connectivity BEFORE calling ExoPlayer to prevent unnecessary errors
                 val isOnline = networkMonitor.isConnected()
                 if (!isOnline) {
                     _playerState.update {
@@ -1497,8 +1663,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                         )
                     }
                     updateForegroundNotification()
-                    delay(3000)
-                    elapsed += 3
+                    delay(2000)
+                    elapsed += 2
                     continue
                 }
 
@@ -1510,42 +1676,22 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 }
                 updateForegroundNotification()
 
-                // Try reconnecting every 8 seconds
-                delay(8000)
-                elapsed += 8
+                try {
+                    val resolvedUrl = StreamUrlResolver.resolveStreamUrl(station.streamUrl)
+                    activeStreamUrl = resolvedUrl
+                    prepareAndPlayExoPlayer(resolvedUrl, station.name)
 
-                if (!isActive) break
-
-                if (networkMonitor.isConnected()) {
-                    try {
-                        val resolvedUrl = StreamUrlResolver.resolveStreamUrl(station.streamUrl)
-                        activeStreamUrl = resolvedUrl
-                        prepareAndPlayExoPlayer(resolvedUrl, station.name)
-
-                        delay(3500)
-                        if (exoPlayer?.isPlaying == true) {
-                            failedConsecutiveAttempts = 0
-                            break
-                        } else {
-                            failedConsecutiveAttempts++
-                        }
-                    } catch (e: Exception) {
-                        Log.d(TAG, "Reconnect attempt failed: ${e.message}")
+                    delay(2500)
+                    if (exoPlayer?.isPlaying == true || _playerState.value.status is PlaybackStatus.Playing) {
+                        failedConsecutiveAttempts = 0
+                        wasPlayingBeforeInterruption = false
+                        break
+                    } else {
                         failedConsecutiveAttempts++
                     }
-                }
-
-                // If host keeps actively refusing connections (2 times in a row while online), abort watchdog
-                if (failedConsecutiveAttempts >= 2 && networkMonitor.isConnected()) {
-                    Log.i(TAG, "Station server connection failed repeatedly. Aborting auto-reconnect.")
-                    _playerState.update {
-                        it.copy(
-                            status = PlaybackStatus.Error("Serveur de radio inaccessible"),
-                            message = "La station ne répond pas. Vérifiez l'adresse ou réessayez plus tard."
-                        )
-                    }
-                    updateForegroundNotification()
-                    break
+                } catch (e: Exception) {
+                    Log.d(TAG, "Reconnect attempt failed: ${e.message}")
+                    failedConsecutiveAttempts++
                 }
             }
 
@@ -1741,6 +1887,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
     fun onPlay() {
         Log.d(TAG, "onPlay: routing command (isDlnaActive=$isDlnaActive)")
+        requestAudioFocus()
+        wasPlayingBeforeFocusLoss = false
+        wasPlayingBeforeInterruption = false
         if (isDlnaActive) {
             resumePlayback()
         } else {
@@ -1756,6 +1905,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
     fun onPause() {
         Log.d(TAG, "onPause: routing command (isDlnaActive=$isDlnaActive)")
+        wasPlayingBeforeFocusLoss = false
+        wasPlayingBeforeInterruption = false
+        abandonAudioFocus()
         if (isDlnaActive) {
             pausePlayback()
         } else {
@@ -1767,6 +1919,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
 
     fun onStop() {
         Log.d(TAG, "onStop: routing command (isDlnaActive=$isDlnaActive)")
+        wasPlayingBeforeFocusLoss = false
+        wasPlayingBeforeInterruption = false
+        abandonAudioFocus()
         if (isDlnaActive) {
             stopDlnaPlayback()
         } else {
@@ -1786,10 +1941,14 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     }
 
     fun resumePlayback() {
+        requestAudioFocus()
+        wasPlayingBeforeFocusLoss = false
+        wasPlayingBeforeInterruption = false
         val state = _playerState.value
         val station = state.currentStation
 
         if (!networkMonitor.isConnected()) {
+            wasPlayingBeforeInterruption = true
             _playerState.update {
                 it.copy(
                     status = PlaybackStatus.NoNetwork,
@@ -1850,6 +2009,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     }
 
     fun pausePlayback() {
+        wasPlayingBeforeFocusLoss = false
+        wasPlayingBeforeInterruption = false
+        abandonAudioFocus()
         if (isDlnaActive) {
             serviceScope.launch {
                 dlnaManager.pause()
@@ -1963,6 +2125,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     }
 
     override fun onDestroy() {
+        abandonAudioFocus()
         cancelReconnect()
         cancelMetadataPolling()
         stopListeningTracker()

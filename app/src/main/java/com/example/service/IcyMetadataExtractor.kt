@@ -45,7 +45,7 @@ object IcyMetadataExtractor {
 
                 val metaIntHeader = response.header("icy-metaint")
                 val metaInt = metaIntHeader?.toIntOrNull()
-                    ?: return@withContext StreamMetadataResult(response.header("icy-name"), bitrate)
+                    ?: return@withContext StreamMetadataResult(null, bitrate)
 
                 val body = response.body ?: return@withContext StreamMetadataResult(null, bitrate)
                 val stream: InputStream = body.byteStream()
@@ -79,7 +79,7 @@ object IcyMetadataExtractor {
                 val matcher = titlePattern.matcher(metaString)
                 if (matcher.find()) {
                     val rawTitle = matcher.group(1)?.trim()
-                    if (!rawTitle.isNullOrEmpty()) {
+                    if (!rawTitle.isNullOrEmpty() && !isStreamPathOrFilename(rawTitle, cleanUrl)) {
                         return@withContext StreamMetadataResult(sanitizeTitle(rawTitle), bitrate)
                     }
                 }
@@ -152,4 +152,45 @@ object IcyMetadataExtractor {
         }
         return Pair("", clean)
     }
+
+    /**
+     * Checks if a title string is actually just a stream file name, mountpoint, or URL path.
+     */
+    fun isStreamPathOrFilename(title: String, streamUrl: String? = null): Boolean {
+        val clean = title.trim()
+        if (clean.isBlank()) return true
+        if (clean.startsWith("http://", ignoreCase = true) || clean.startsWith("https://", ignoreCase = true)) return true
+        if (clean.startsWith("/")) return true
+
+        val lower = clean.lowercase()
+        val extensions = listOf(".mp3", ".aac", ".m3u8", ".pls", ".m3u", ".ogg", ".opus", ".flac", ".wav", ".stream", ".ts", ".ashx")
+        if (extensions.any { lower.endsWith(it) }) return true
+
+        val genericNames = setOf(
+            "stream", "live", "audio", "direct", "listen", "chunklist", "radio",
+            "mountpoint", "main", "ch01", "ch1", "stream.mp3", "stream.aac",
+            "audio.mp3", "audio.aac", "live.mp3", "live.aac"
+        )
+        if (lower in genericNames) return true
+
+        if (!streamUrl.isNullOrBlank()) {
+            try {
+                val uri = android.net.Uri.parse(streamUrl)
+                val lastSegment = uri.lastPathSegment
+                if (!lastSegment.isNullOrBlank() && clean.equals(lastSegment, ignoreCase = true)) return true
+                val path = uri.path
+                if (!path.isNullOrBlank()) {
+                    val cleanPath = path.trimEnd('/')
+                    if (cleanPath.endsWith("/$clean", ignoreCase = true) ||
+                        cleanPath.equals(clean, ignoreCase = true) ||
+                        cleanPath.equals("/$clean", ignoreCase = true)
+                    ) {
+                        return true
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return false
+    }
 }
+
