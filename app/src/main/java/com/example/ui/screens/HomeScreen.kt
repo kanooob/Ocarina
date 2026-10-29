@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
@@ -39,9 +40,11 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speaker
@@ -64,11 +67,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -93,6 +99,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.data.OnlineRadio
 import com.example.data.RadioStation
 import com.example.service.PlaybackStatus
 import com.example.ui.LocalAppStrings
@@ -123,10 +130,23 @@ fun HomeScreen(
     val dlnaError by viewModel.dlnaError.collectAsStateWithLifecycle()
     val totalListeningSeconds by viewModel.totalListeningSeconds.collectAsStateWithLifecycle()
 
+    val onlineSearchResults by viewModel.onlineSearchResults.collectAsStateWithLifecycle()
+    val isSearchingOnline by viewModel.isSearchingOnline.collectAsStateWithLifecycle()
+    val topOnlineStations by viewModel.topOnlineStations.collectAsStateWithLifecycle()
+
     var showStationSelectorSheet by remember { mutableStateOf(false) }
     var showDlnaSheet by remember { mutableStateOf(false) }
     var showCreateStationDialog by remember { mutableStateOf(false) }
     var showBitrateBubble by remember { mutableStateOf(false) }
+    var onlineSearchQueryText by remember { mutableStateOf("") }
+    var selectedSheetTabIndex by remember { mutableStateOf(0) }
+    var prefilledStationForDialog by remember { mutableStateOf<RadioStation?>(null) }
+
+    LaunchedEffect(showStationSelectorSheet) {
+        if (showStationSelectorSheet) {
+            viewModel.loadTopOnlineStations()
+        }
+    }
 
     val scrollState = rememberScrollState()
     val sheetState = rememberModalBottomSheetState()
@@ -251,7 +271,10 @@ fun HomeScreen(
         ) {
             if (stations.isEmpty()) {
                 EmptyStationsCard(
-                    onAddStationClicked = { showCreateStationDialog = true },
+                    onAddStationClicked = {
+                        prefilledStationForDialog = null
+                        showCreateStationDialog = true
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 640.dp)
@@ -824,18 +847,22 @@ fun HomeScreen(
         }
     }
 
-    // Modal bottom sheet : Choisir une station
+    // Modal bottom sheet : Choisir une station & Recherche universelle (locale et libre en ligne)
     if (showStationSelectorSheet) {
         ModalBottomSheet(
-            onDismissRequest = { showStationSelectorSheet = false },
+            onDismissRequest = {
+                showStationSelectorSheet = false
+                onlineSearchQueryText = ""
+            },
             sheetState = sheetState
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = 20.dp)
                     .padding(bottom = 32.dp)
             ) {
+                // En-tête avec titre et bouton d'ajout manuel
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -846,9 +873,9 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    // Simple icône + pour ajouter/créer une station
                     IconButton(
                         onClick = {
+                            prefilledStationForDialog = null
                             showStationSelectorSheet = false
                             showCreateStationDialog = true
                         },
@@ -862,72 +889,287 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                if (stations.isEmpty()) {
-                    Text(
-                        text = strings.noStationAvailable,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                // Barre de recherche universelle
+                OutlinedTextField(
+                    value = onlineSearchQueryText,
+                    onValueChange = {
+                        onlineSearchQueryText = it
+                        viewModel.searchOnlineRadios(it)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("station_search_input"),
+                    placeholder = {
+                        Text(
+                            text = strings.searchStationPlaceholder,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingIcon = {
+                        if (onlineSearchQueryText.isNotBlank()) {
+                            IconButton(onClick = {
+                                onlineSearchQueryText = ""
+                                viewModel.searchOnlineRadios("")
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Effacer",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Onglets de navigation : Mes radios vs En ligne (RadioBrowser)
+                TabRow(
+                    selectedTabIndex = selectedSheetTabIndex,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Tab(
+                        selected = selectedSheetTabIndex == 0,
+                        onClick = { selectedSheetTabIndex = 0 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Radio,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("${strings.myStationsTab} (${stations.size})")
+                            }
+                        }
                     )
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(stations, key = { it.id }) { station ->
-                            val isSelected = station.id == activeStation?.id
-                            Card(
-                                shape = RoundedCornerShape(18.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.selectAndPlayStation(station)
-                                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
-                                            showStationSelectorSheet = false
-                                        }
-                                    }
-                            ) {
-                                Row(
+                    Tab(
+                        selected = selectedSheetTabIndex == 1,
+                        onClick = {
+                            selectedSheetTabIndex = 1
+                            viewModel.loadTopOnlineStations()
+                        },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Public,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(strings.onlineRadiosTab)
+                            }
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Affichage du contenu selon l'onglet actif
+                if (selectedSheetTabIndex == 0) {
+                    val filteredStations = remember(stations, onlineSearchQueryText) {
+                        if (onlineSearchQueryText.isBlank()) stations else stations.filter {
+                            it.name.contains(onlineSearchQueryText, ignoreCase = true) ||
+                            it.streamUrl.contains(onlineSearchQueryText, ignoreCase = true)
+                        }
+                    }
+
+                    if (filteredStations.isEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = if (stations.isEmpty()) strings.noStationAvailable else "Aucune station locale ne correspond.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (onlineSearchQueryText.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        selectedSheetTabIndex = 1
+                                        viewModel.searchOnlineRadios(onlineSearchQueryText)
+                                    },
+                                    shape = RoundedCornerShape(18.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Public,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(strings.searchOnlineCta.format(onlineSearchQueryText))
+                                }
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(filteredStations, key = { it.id }) { station ->
+                                val isSelected = station.id == activeStation?.id
+                                Card(
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    ),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                        .clickable {
+                                            viewModel.selectAndPlayStation(station)
+                                            coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
+                                                showStationSelectorSheet = false
+                                                onlineSearchQueryText = ""
+                                            }
+                                        }
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = station.name,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                                            else MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        // URL sans coupure abrupte, lisible et contrastée
-                                        Text(
-                                            text = station.streamUrl,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = station.name,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = station.streamUrl,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
 
-                                    if (isSelected) {
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = strings.activeStation,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
+                                        if (isSelected) {
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = strings.activeStation,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                     }
                                 }
+                            }
+                        }
+                    }
+                } else {
+                    // Onglet En ligne (Service libre RadioBrowser)
+                    val displayRadios = if (onlineSearchQueryText.isNotBlank()) onlineSearchResults else topOnlineStations
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (onlineSearchQueryText.isNotBlank()) {
+                                "${displayRadios.size} radios trouvées (haute qualité)"
+                            } else {
+                                strings.onlinePopularTitle
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (isSearchingOnline) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (isSearchingOnline && displayRadios.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 36.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = strings.searchingOnline,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else if (displayRadios.isEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = if (onlineSearchQueryText.isBlank()) strings.onlineSearchPrompt else strings.onlineSearchEmpty,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(displayRadios, key = { it.stationUuid }) { radio ->
+                                OnlineRadioItem(
+                                    radio = radio,
+                                    isDlnaActive = isDlnaCasting,
+                                    onPlayOrCast = {
+                                        val tempStation = RadioStation(
+                                            name = radio.name,
+                                            streamUrl = radio.streamUrl
+                                        )
+                                        viewModel.playTemporaryStation(tempStation)
+                                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
+                                            showStationSelectorSheet = false
+                                            onlineSearchQueryText = ""
+                                        }
+                                    },
+                                    onAddToList = {
+                                        prefilledStationForDialog = RadioStation(
+                                            name = radio.name,
+                                            streamUrl = radio.streamUrl
+                                        )
+                                        showStationSelectorSheet = false
+                                        showCreateStationDialog = true
+                                    }
+                                )
                             }
                         }
                     }
@@ -1299,21 +1541,147 @@ fun HomeScreen(
 
     if (showCreateStationDialog) {
         StationEditDialog(
-            existingStation = null,
-            onDismiss = { showCreateStationDialog = false },
+            existingStation = prefilledStationForDialog,
+            onDismiss = {
+                showCreateStationDialog = false
+                prefilledStationForDialog = null
+            },
             onSave = { name, streamUrl, changeSongUrl ->
                 viewModel.addStation(name, streamUrl, changeSongUrl) { newId ->
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Station '$name' créée avec succès")
+                        snackbarHostState.showSnackbar(strings.stationAddedSuccess.format(name))
                     }
                     viewModel.playStationById(newId)
                 }
                 showCreateStationDialog = false
+                prefilledStationForDialog = null
             },
             onTestStream = { testUrl ->
                 viewModel.testStreamUrl(testUrl)
             }
         )
+    }
+}
+
+@Composable
+fun OnlineRadioItem(
+    radio: OnlineRadio,
+    isDlnaActive: Boolean,
+    onPlayOrCast: () -> Unit,
+    onAddToList: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Favicon ou icône de repli
+            AsyncImage(
+                model = radio.favicon.ifBlank { R.drawable.ic_default_artwork },
+                contentDescription = radio.name,
+                placeholder = painterResource(id = R.drawable.ic_default_artwork),
+                error = painterResource(id = R.drawable.ic_default_artwork),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = radio.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Badge qualité (Débit en kb/s + codec)
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Text(
+                            text = if (radio.bitrateKbps > 0) "${radio.bitrateKbps} kb/s" else radio.codec,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    val info = listOfNotNull(
+                        radio.country.takeIf { it.isNotBlank() },
+                        radio.tags.split(",").firstOrNull { it.isNotBlank() }?.trim()
+                    ).joinToString(" • ")
+
+                    if (info.isNotBlank()) {
+                        Text(
+                            text = info,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Bouton Écouter / Diffuser
+            IconButton(
+                onClick = onPlayOrCast,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+            ) {
+                Icon(
+                    imageVector = if (isDlnaActive) Icons.Default.Cast else Icons.Default.PlayArrow,
+                    contentDescription = if (isDlnaActive) "Diffuser" else "Écouter",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Bouton Ajouter à la liste (ouvre le dialogue pré-rempli)
+            IconButton(
+                onClick = onAddToList,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Ajouter à ma liste",
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
     }
 }
 

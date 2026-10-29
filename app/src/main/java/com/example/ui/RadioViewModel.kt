@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.RadioApp
 import com.example.data.AppLanguage
+import com.example.data.OnlineRadio
+import com.example.data.RadioBrowserService
 import com.example.data.RadioStation
 import com.example.data.ThemeMode
 import com.example.service.PlaybackStatus
@@ -13,8 +15,11 @@ import com.example.service.RadioPlaybackService
 import com.example.service.StreamUrlResolver
 import com.example.util.ShortcutHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,6 +68,92 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     val skipStreamReload: StateFlow<Boolean> = preferences.skipStreamReload
     val artworkResolution: StateFlow<com.example.data.ArtworkResolution> = preferences.artworkResolution
     val totalListeningSeconds: StateFlow<Long> = preferences.totalListeningSeconds
+
+    // Recherche de webradios en ligne (service libre RadioBrowser)
+    private val _onlineSearchQuery = MutableStateFlow("")
+    val onlineSearchQuery: StateFlow<String> = _onlineSearchQuery.asStateFlow()
+
+    private val _onlineSearchResults = MutableStateFlow<List<OnlineRadio>>(emptyList())
+    val onlineSearchResults: StateFlow<List<OnlineRadio>> = _onlineSearchResults.asStateFlow()
+
+    private val _isSearchingOnline = MutableStateFlow(false)
+    val isSearchingOnline: StateFlow<Boolean> = _isSearchingOnline.asStateFlow()
+
+    private val _topOnlineStations = MutableStateFlow<List<OnlineRadio>>(emptyList())
+    val topOnlineStations: StateFlow<List<OnlineRadio>> = _topOnlineStations.asStateFlow()
+
+    private var onlineSearchJob: Job? = null
+
+    fun searchOnlineRadios(query: String) {
+        _onlineSearchQuery.value = query
+        onlineSearchJob?.cancel()
+        val trimmed = query.trim()
+        if (trimmed.length < 2) {
+            _onlineSearchResults.value = emptyList()
+            _isSearchingOnline.value = false
+            return
+        }
+
+        onlineSearchJob = viewModelScope.launch {
+            _isSearchingOnline.value = true
+            try {
+                val results = RadioBrowserService.searchRadios(trimmed)
+                _onlineSearchResults.value = results
+            } catch (e: Exception) {
+                _onlineSearchResults.value = emptyList()
+            } finally {
+                _isSearchingOnline.value = false
+            }
+        }
+    }
+
+    fun loadTopOnlineStations() {
+        if (_topOnlineStations.value.isNotEmpty()) return
+        viewModelScope.launch {
+            try {
+                val top = RadioBrowserService.getTopStations(limit = 20)
+                _topOnlineStations.value = top
+            } catch (e: Exception) {
+                // ignore
+            }
+        }
+    }
+
+    fun playTemporaryStation(station: RadioStation) {
+        viewModelScope.launch {
+            if (dlnaManager.isDlnaActive) {
+                val activeDev = dlnaManager.activeDevice.value
+                if (activeDev != null) {
+                    val resolvedUrl = withContext(Dispatchers.IO) {
+                        StreamUrlResolver.resolveStreamUrl(station.streamUrl)
+                    }
+                    RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_PAUSE)
+                    val success = dlnaManager.castStream(
+                        device = activeDev,
+                        streamUrl = resolvedUrl,
+                        title = station.name,
+                        artist = "",
+                        stationName = station.name,
+                        artworkUrl = null
+                    )
+                    if (success) {
+                        RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_SYNC_DLNA)
+                    }
+                    return@launch
+                }
+            }
+            RadioPlaybackService.playStation(getApplication(), station)
+        }
+    }
+
+    fun addOnlineStation(onlineRadio: OnlineRadio, onResult: (Long) -> Unit = {}) {
+        addStation(
+            name = onlineRadio.name,
+            streamUrl = onlineRadio.streamUrl,
+            changeSongUrl = "",
+            onResult = onResult
+        )
+    }
 
     fun resetListeningTime() {
         preferences.resetListeningTime()

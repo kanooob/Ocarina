@@ -17,6 +17,7 @@
 
 ### 📻 Moteur Audio & Streaming Webradio
 - **Compatibilité Universelle** : Prise en charge des flux audio Shoutcast, Icecast, AAC, MP3, OGG, ainsi que des playlists `.m3u` et `.pls` grâce au résolveur automatique `StreamUrlResolver`.
+- **Découverte & Recherche Libre (RadioBrowser)** : Recherche intégrée parmi plus de 40 000 stations de radio mondiales libres et open-source via l'API RadioBrowser, avec sélection automatique du flux audio ayant la meilleure qualité disponible (débit le plus élevé). Écoute immédiate, diffusion DLNA ou ajout en 1 clic à votre liste avec pré-remplissage automatique du nom et de l'URL.
 - **Extraction des Métadonnées en Direct** : Extraction en temps réel du titre et de l'artiste (`Icy-MetaData`) avec décodage multi-encodage (UTF-8, Windows-1252, ISO-8859-1) et nettoyage des entités HTML.
 - **Pochettes d'Albums Dynamiques (Artwork)** : Recherche instantanée de pochettes en haute définition (600×600 px) via l'API iTunes avec bascule transparente vers Deezer en secours, et cache mémoire/disque optimisé avec Coil.
 - **Saut de Morceau Intelligent (Skip)** : Envoi d'une requête de changement de chanson au serveur avec reconnexion active configurable du flux audio pour éliminer la latence du buffer.
@@ -61,6 +62,7 @@ app/src/main/java/com/example/
 ├── data/                       # Couche Données & Persistance
 │   ├── AppPreferences.kt       # Préférences utilisateur (thème, langue, temps d'écoute)
 │   ├── BackupData.kt           # Sérialisation / Désérialisation JSON
+│   ├── RadioBrowserService.kt  # Client annuaire open-source RadioBrowser & sélection HD
 │   ├── RadioDatabase.kt        # Base de données Room locale (SQLite)
 │   ├── RadioStation.kt         # Entité Room des stations
 │   └── RadioStationDao.kt      # Requêtes DAO pour les stations

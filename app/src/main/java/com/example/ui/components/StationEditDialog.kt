@@ -93,7 +93,7 @@ fun StationEditDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (existingStation == null) strings.addStation else strings.editStation,
+                    text = if (existingStation == null || existingStation.id == 0L) strings.addStation else strings.editStation,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )

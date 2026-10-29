@@ -118,7 +118,19 @@ data class Strings(
     val pasteJsonPlaceholder: String,
     val selectJsonFile: String,
     val saveJsonFile: String,
-    val formatDurationDaysHoursMinutes: String
+    val formatDurationDaysHoursMinutes: String,
+    val searchStationPlaceholder: String,
+    val myStationsTab: String,
+    val onlineRadiosTab: String,
+    val onlineSearchEmpty: String,
+    val onlineSearchPrompt: String,
+    val onlinePopularTitle: String,
+    val bestQualityBadge: String,
+    val listenOrCast: String,
+    val addToMyStations: String,
+    val stationAddedSuccess: String,
+    val searchingOnline: String,
+    val searchOnlineCta: String
 )
 
 val FrenchStrings = Strings(
@@ -234,7 +246,19 @@ val FrenchStrings = Strings(
     pasteJsonPlaceholder = "{\n  \"totalListeningSeconds\": ...,\n  \"stations\": [...]\n}",
     selectJsonFile = "Sélectionner un fichier .json",
     saveJsonFile = "Enregistrer le fichier .json",
-    formatDurationDaysHoursMinutes = "%dj %dh %dm"
+    formatDurationDaysHoursMinutes = "%dj %dh %dm",
+    searchStationPlaceholder = "Rechercher une radio (nom, genre, pays)…",
+    myStationsTab = "Mes radios",
+    onlineRadiosTab = "En ligne (RadioBrowser)",
+    onlineSearchEmpty = "Aucune radio trouvée pour cette recherche.",
+    onlineSearchPrompt = "Recherchez parmi plus de 40 000 webradios mondiales libres.",
+    onlinePopularTitle = "Radios populaires du moment",
+    bestQualityBadge = "Flux HD",
+    listenOrCast = "Écouter",
+    addToMyStations = "Ajouter",
+    stationAddedSuccess = "Station '%s' ajoutée avec succès",
+    searchingOnline = "Recherche en ligne…",
+    searchOnlineCta = "Rechercher '%s' en ligne 🌐"
 )
 
 val EnglishStrings = Strings(
@@ -350,7 +374,19 @@ val EnglishStrings = Strings(
     pasteJsonPlaceholder = "{\n  \"totalListeningSeconds\": ...,\n  \"stations\": [...]\n}",
     selectJsonFile = "Select a .json file",
     saveJsonFile = "Save as .json file",
-    formatDurationDaysHoursMinutes = "%dd %dh %dm"
+    formatDurationDaysHoursMinutes = "%dd %dh %dm",
+    searchStationPlaceholder = "Search radio stations (name, genre, country)…",
+    myStationsTab = "My Radios",
+    onlineRadiosTab = "Online (RadioBrowser)",
+    onlineSearchEmpty = "No radio stations found for this search.",
+    onlineSearchPrompt = "Search through over 40,000 free online radio stations.",
+    onlinePopularTitle = "Popular stations right now",
+    bestQualityBadge = "HD Stream",
+    listenOrCast = "Listen",
+    addToMyStations = "Add",
+    stationAddedSuccess = "Station '%s' added successfully",
+    searchingOnline = "Searching online…",
+    searchOnlineCta = "Search '%s' online 🌐"
 )
 
 val LocalAppStrings = compositionLocalOf { FrenchStrings }

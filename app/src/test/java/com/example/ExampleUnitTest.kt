@@ -82,4 +82,35 @@ class ExampleUnitTest {
     assertFalse(com.example.service.StreamUrlResolver.isYouTubeUrl("https://stream.radioparadise.com/aac-320"))
     assertFalse(com.example.service.StreamUrlResolver.isYouTubeUrl("https://twitch.tv/lofigirl"))
   }
+
+  @Test
+  fun test_online_radio_model_and_quality() {
+    val lowQuality = com.example.data.OnlineRadio(
+      stationUuid = "uuid-1",
+      name = "FIP (128k)",
+      streamUrl = "http://stream.example.com/128",
+      bitrateKbps = 128,
+      codec = "MP3",
+      favicon = "",
+      country = "France",
+      tags = "jazz, eclectic"
+    )
+
+    val highQuality = com.example.data.OnlineRadio(
+      stationUuid = "uuid-2",
+      name = "FIP (320k HD)",
+      streamUrl = "https://stream.example.com/320",
+      bitrateKbps = 320,
+      codec = "AAC",
+      favicon = "https://example.com/logo.png",
+      country = "France",
+      tags = "jazz, eclectic"
+    )
+
+    val list = listOf(lowQuality, highQuality)
+    val best = list.maxByOrNull { it.bitrateKbps }
+    assertNotNull(best)
+    assertEquals(320, best?.bitrateKbps)
+    assertEquals("https://stream.example.com/320", best?.streamUrl)
+  }
 }
