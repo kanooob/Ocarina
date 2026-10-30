@@ -269,11 +269,17 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            if (stations.isEmpty()) {
+            if (stations.isEmpty() && activeStation == null) {
                 EmptyStationsCard(
+                    onCardClicked = {
+                        selectedSheetTabIndex = 1
+                        viewModel.loadTopOnlineStations()
+                        showStationSelectorSheet = true
+                    },
                     onAddStationClicked = {
-                        prefilledStationForDialog = null
-                        showCreateStationDialog = true
+                        selectedSheetTabIndex = 1
+                        viewModel.loadTopOnlineStations()
+                        showStationSelectorSheet = true
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -445,6 +451,39 @@ fun HomeScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+
+                        // Si la radio écoutée n'est pas encore enregistrée
+                        if (activeStation != null && stations.none { it.streamUrl == activeStation.streamUrl }) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable {
+                                        prefilledStationForDialog = activeStation
+                                        showCreateStationDialog = true
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = strings.addToMyStations,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
 
                         // Pochette d'album dynamique (Haute Définition 600x600 ou Placeholder neutre Ocarina)
                         Box(
@@ -852,7 +891,6 @@ fun HomeScreen(
         ModalBottomSheet(
             onDismissRequest = {
                 showStationSelectorSheet = false
-                onlineSearchQueryText = ""
             },
             sheetState = sheetState
         ) {
@@ -1038,7 +1076,6 @@ fun HomeScreen(
                                             viewModel.selectAndPlayStation(station)
                                             coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
                                                 showStationSelectorSheet = false
-                                                onlineSearchQueryText = ""
                                             }
                                         }
                                 ) {
@@ -1147,19 +1184,18 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             items(displayRadios, key = { it.stationUuid }) { radio ->
+                                val isCurrentlyPlaying = (playerState.currentStation?.streamUrl == radio.streamUrl) &&
+                                        (playerState.status is PlaybackStatus.Playing || playerState.status is PlaybackStatus.Buffering)
                                 OnlineRadioItem(
                                     radio = radio,
                                     isDlnaActive = isDlnaCasting,
+                                    isCurrentlyPlaying = isCurrentlyPlaying,
                                     onPlayOrCast = {
                                         val tempStation = RadioStation(
                                             name = radio.name,
                                             streamUrl = radio.streamUrl
                                         )
                                         viewModel.playTemporaryStation(tempStation)
-                                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
-                                            showStationSelectorSheet = false
-                                            onlineSearchQueryText = ""
-                                        }
                                     },
                                     onAddToList = {
                                         prefilledStationForDialog = RadioStation(
@@ -1567,24 +1603,26 @@ fun HomeScreen(
 fun OnlineRadioItem(
     radio: OnlineRadio,
     isDlnaActive: Boolean,
+    isCurrentlyPlaying: Boolean,
     onPlayOrCast: () -> Unit,
     onAddToList: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Favicon ou icône de repli
+            // Favicon ou icône de repli (38dp)
             AsyncImage(
                 model = radio.favicon.ifBlank { R.drawable.ic_default_artwork },
                 contentDescription = radio.name,
@@ -1592,12 +1630,12 @@ fun OnlineRadioItem(
                 error = painterResource(id = R.drawable.ic_default_artwork),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.surface)
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -1609,7 +1647,7 @@ fun OnlineRadioItem(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1617,7 +1655,7 @@ fun OnlineRadioItem(
                 ) {
                     // Badge qualité (Débit en kb/s + codec)
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ) {
@@ -1625,7 +1663,7 @@ fun OnlineRadioItem(
                             text = if (radio.bitrateKbps > 0) "${radio.bitrateKbps} kb/s" else radio.codec,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                         )
                     }
 
@@ -1646,40 +1684,56 @@ fun OnlineRadioItem(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Bouton Écouter / Diffuser
-            IconButton(
-                onClick = onPlayOrCast,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-            ) {
-                Icon(
-                    imageVector = if (isDlnaActive) Icons.Default.Cast else Icons.Default.PlayArrow,
-                    contentDescription = if (isDlnaActive) "Diffuser" else "Écouter",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Bouton Ajouter à la liste (ouvre le dialogue pré-rempli)
-            IconButton(
-                onClick = onAddToList,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
+            // Boutons d'actions compacts (34dp) qui ne débordent jamais de l'écran
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Ajouter à ma liste",
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(20.dp)
-                )
+                // Bouton Écouter / Pause
+                Surface(
+                    shape = CircleShape,
+                    color = if (isCurrentlyPlaying) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                    tonalElevation = 2.dp,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onPlayOrCast)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = when {
+                                isDlnaActive -> Icons.Default.Cast
+                                isCurrentlyPlaying -> Icons.Default.Pause
+                                else -> Icons.Default.PlayArrow
+                            },
+                            contentDescription = if (isDlnaActive) "Diffuser" else if (isCurrentlyPlaying) "Pause" else "Écouter",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // Bouton Ajouter à la liste
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    tonalElevation = 1.dp,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onAddToList)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Ajouter à ma liste",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -1687,12 +1741,15 @@ fun OnlineRadioItem(
 
 @Composable
 fun EmptyStationsCard(
+    onCardClicked: () -> Unit,
     onAddStationClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
     Card(
-        modifier = modifier,
+        modifier = modifier
+            .clip(RoundedCornerShape(28.dp))
+            .clickable(onClick = onCardClicked),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -1738,9 +1795,9 @@ fun EmptyStationsCard(
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.testTag("add_first_station_button")
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(imageVector = Icons.Default.Public, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(strings.addStation)
+                Text(strings.onlineRadiosTab)
             }
         }
     }

@@ -8,8 +8,6 @@
     android:targetCellHeight="2"
     android:minResizeWidth="70dp"
     android:minResizeHeight="70dp"
-    android:maxResizeWidth="260dp"
-    android:maxResizeHeight="260dp"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_circle_layout"

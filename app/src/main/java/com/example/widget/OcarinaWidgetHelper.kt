@@ -212,12 +212,13 @@ private fun updateCircleWidgetsInternal(
         val appWidgetIds = appWidgetManager.getAppWidgetIds(rectComponent)
         if (appWidgetIds.isEmpty()) return
 
-        val dominantColor = extractDominantColor(artwork)
+        val dominantBgColor = extractDominantColor(artwork)
+        val primaryAccentColor = extractPrimaryAccentColor(artwork)
         val roundedArtwork = createRoundedBitmap(artwork, 24f)
 
         val views = RemoteViews(context.packageName, R.layout.widget_rectangle_layout).apply {
             // Teinte dynamique du fond rectangulaire
-            setInt(R.id.widget_rect_background, "setColorFilter", dominantColor)
+            setInt(R.id.widget_rect_background, "setColorFilter", dominantBgColor)
 
             // Pochette d'album arrondie
             setImageViewBitmap(R.id.widget_rect_artwork, roundedArtwork)
@@ -226,10 +227,17 @@ private fun updateCircleWidgetsInternal(
             setTextViewText(R.id.widget_rect_title, title)
             setTextViewText(R.id.widget_rect_artist, subtitle)
 
-            // Bouton Play / Pause
+            // Bouton Play / Pause avec la couleur principale de l'image affichée
+            setInt(R.id.widget_rect_btn_play_pause_bg, "setColorFilter", primaryAccentColor)
             setImageViewResource(
                 R.id.widget_rect_btn_play_pause,
                 if (isPlaying) R.drawable.ic_widget_pause else R.drawable.ic_widget_play
+            )
+            val isLightAccent = androidx.core.graphics.ColorUtils.calculateLuminance(primaryAccentColor) > 0.45
+            setInt(
+                R.id.widget_rect_btn_play_pause,
+                "setColorFilter",
+                if (isLightAccent) Color.parseColor("#141E11") else Color.WHITE
             )
 
             // Actions de contrôle
@@ -270,6 +278,50 @@ private fun updateCircleWidgetsInternal(
 
         for (id in appWidgetIds) {
             appWidgetManager.updateAppWidget(id, views)
+        }
+    }
+
+    /**
+     * Extrait la couleur principale / vibrante de l'image affichée pour colorer
+     * le bouton play/pause du widget.
+     */
+    fun extractPrimaryAccentColor(bitmap: Bitmap): Int {
+        return try {
+            val sampleSize = 24
+            val scaled = Bitmap.createScaledBitmap(bitmap, sampleSize, sampleSize, false)
+            val pixels = IntArray(sampleSize * sampleSize)
+            scaled.getPixels(pixels, 0, sampleSize, 0, 0, sampleSize, sampleSize)
+            if (scaled != bitmap) scaled.recycle()
+
+            var bestColor = Color.parseColor("#889058")
+            var highestScore = -1f
+
+            for (pixel in pixels) {
+                val a = Color.alpha(pixel)
+                if (a < 128) continue
+                val r = Color.red(pixel)
+                val g = Color.green(pixel)
+                val b = Color.blue(pixel)
+
+                val hsv = FloatArray(3)
+                Color.RGBToHSV(r, g, b, hsv)
+                val saturation = hsv[1]
+                val value = hsv[2]
+
+                // Recherche de la couleur principale la plus vive et équilibrée
+                if (value in 0.32f..0.96f && saturation in 0.20f..0.98f) {
+                    val score = saturation * 1.5f + (1f - kotlin.math.abs(value - 0.7f))
+                    if (score > highestScore) {
+                        highestScore = score
+                        hsv[1] = hsv[1].coerceIn(0.35f, 0.85f)
+                        hsv[2] = hsv[2].coerceIn(0.55f, 0.88f)
+                        bestColor = Color.HSVToColor(hsv)
+                    }
+                }
+            }
+            bestColor
+        } catch (e: Exception) {
+            Color.parseColor("#889058")
         }
     }
 
@@ -329,7 +381,7 @@ private fun updateCircleWidgetsInternal(
     }
 
     /**
-     * Découpe un bitmap en cercle parfait avec anti-aliasing
+     * Découpe un bitmap en cercle parfait avec bordure soignée et anti-aliasing
      */
     fun createCircularBitmap(src: Bitmap): Bitmap {
         return try {
@@ -338,6 +390,12 @@ private fun updateCircleWidgetsInternal(
             val canvas = Canvas(output)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
+            // Fond sombre circulaire de base
+            paint.style = Paint.Style.FILL
+            paint.color = Color.parseColor("#FF242B20")
+            val radius = size / 2f
+            canvas.drawCircle(radius, radius, radius, paint)
+
             val left = (src.width - size) / 2
             val top = (src.height - size) / 2
             val cropped = if (src.width != size || src.height != size) {
@@ -345,8 +403,16 @@ private fun updateCircleWidgetsInternal(
             } else src
 
             paint.shader = BitmapShader(cropped, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-            val radius = size / 2f
-            canvas.drawCircle(radius, radius, radius, paint)
+            canvas.drawCircle(radius, radius, radius - 2f, paint)
+
+            // Bordure circulaire nette et anti-aliasée
+            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                color = Color.parseColor("#FF889058")
+                strokeWidth = (size * 0.035f).coerceIn(4f, 16f)
+            }
+            canvas.drawCircle(radius, radius, radius - strokePaint.strokeWidth / 2f, strokePaint)
+
             if (cropped != src && cropped != output) cropped.recycle()
             output
         } catch (e: Exception) {

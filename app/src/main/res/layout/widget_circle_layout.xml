@@ -7,20 +7,20 @@
     android:orientation="vertical"
     android:padding="4dp">
 
-    <!-- Cercle central cliquable (Bouton principal Play / Pause sur l'artwork) -->
+    <!-- Cercle central cliquable adaptatif qui grandit avec le widget -->
     <FrameLayout
         android:id="@+id/widget_circle_button"
-        android:layout_width="96dp"
-        android:layout_height="96dp"
-        android:layout_gravity="center_horizontal"
-        android:background="@drawable/bg_widget_circle">
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_gravity="center">
 
         <!-- Pochette circulaire dynamique (ou logo Ocarina par défaut) - Action rapide Play/Pause -->
         <ImageView
             android:id="@+id/widget_circle_artwork"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="centerCrop"
+            android:scaleType="fitCenter"
             android:src="@drawable/ic_ocarina_logo"
             android:contentDescription="@string/action_play" />
     </FrameLayout>

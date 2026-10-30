@@ -16,10 +16,9 @@ data class BackupData(
 ) {
     fun toJsonString(): String {
         val root = JSONObject()
-        root.put("version", 1)
+        root.put("version", 2)
         root.put("exportedAt", exportedAt)
         root.put("totalListeningSeconds", totalListeningSeconds)
-        root.put("dureeEcouteGlobaleSecondes", totalListeningSeconds)
 
         val stationsArray = JSONArray()
         for (station in stations) {
@@ -27,7 +26,6 @@ data class BackupData(
             stationObj.put("name", station.name)
             stationObj.put("streamUrl", station.streamUrl)
             stationObj.put("changeSongUrl", station.changeSongUrl)
-            stationObj.put("skipUrl", station.changeSongUrl)
             stationsArray.put(stationObj)
         }
         root.put("stations", stationsArray)
