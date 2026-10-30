@@ -1,6 +1,0 @@
-{
-  "summary":  "Plan d'implémentation pour la refonte Ocarina couvrant la robustesse MediaSession, l'alerte d'échec de reconnexion après 5 minutes, le contrôle de flux au skip, l'enrichissement dynamique d'artwork (iTunes/Deezer en 600x600), le rebranding complet Ocarina et les correctifs ergonomiques UI/UX.",
-  "updatedAt":  "2026-10-26T07:08:07.949775975Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
