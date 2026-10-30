@@ -13,26 +13,24 @@ UpdateCheckMode: Tags
 AntiFeatures:
   - NonFreeNet
 
-Summary: Lecteur de webradio libre, streaming direct et diffusion DLNA
+Summary: Open-source internet radio player, live streaming, and DLNA broadcasting
 Description: |-
-  Ocarina est un lecteur de webradio 100% logiciel libre sous licence GNU GPLv3,
-  conçu pour une écoute musicale fluide et sans distractions sur Android.
-
+ Ocarina is an internet radio player that is 100% free software, licensed under the GNU GPLv3,
+designed for a smooth, distraction-free music listening experience on Android.
   Fonctionnalités :
-  * Diffusion directe des flux Icecast, Shoutcast, HLS (.m3u8), RTSP et DASH
-  * Annuaire libre Radio Browser intégré avec plus de 40 000 stations
-  * Extraction des métadonnées en direct (titre, artiste via Icy-MetaData)
-  * Pochettes d'albums dynamiques haute résolution en temps réel
-  * Diffusion sans fil DLNA / UPnP sur enceintes connectées, TV et amplificateurs
-  * Contrôle physique du volume DLNA depuis les boutons du smartphone
-  * Compteur persistant du temps d'écoute cumulé
-  * Widgets pour écran d'accueil (bouton circulaire et lecteur adaptatif)
-  * Exportation et importation de sauvegardes complètes en JSON
-  * Zéro traqueur, zéro publicité, aucun compte requis, zéro service propriétaire
+  * Direct streaming of Icecast, Shoutcast, HLS (.m3u8), RTSP, and DASH feeds
+  * Integrated open-source Radio Browser directory with over 40,000 stations
+  * Live metadata extraction (title, artist via Icy-MetaData)
+  * Dynamic, high-resolution album art in real time
+  * Wireless streaming via DLNA/UPnP to connected speakers, TVs, and amplifiers
+  * Physical DLNA volume control using smartphone buttons
+  * Persistent counter for cumulative listening time
+  * Home screen widgets (circular button and adaptive player)
+  * Exporting and importing full backups in JSON format
+  * Zero trackers, zero ads, no account required, zero proprietary services
 
   Mention Anti-Features :
-  * NonFreeNet : L'application permet la résolution et l'écoute optionnelle
-    de flux en direct issus de plateformes réseau propriétaires (YouTube et Twitch).
+  * NonFreeNet : The application enables the playback—with optional audio—of live streams from proprietary network platforms (YouTube and Twitch).
 
 RepoType: git
 Repo: https://github.com/kanooob/Ocarina.git
