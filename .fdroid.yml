@@ -9,9 +9,9 @@ Categories:
   - Internet
 
 License: GPL-3.0-or-later
-AuthorName: Aidan & Galaxie Team
-SourceCode: https://github.com/aidan64laf/ocarina
-IssueTracker: https://github.com/aidan64laf/ocarina/issues
+AuthorName: kanooob & Galaxie_s9
+SourceCode: https://github.com/kanooob/ocarina
+IssueTracker: https://github.com/kanoob/ocarina/issues
 
 Builds:
   - versionName: '211'
