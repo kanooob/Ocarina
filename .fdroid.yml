@@ -14,9 +14,9 @@ SourceCode: https://github.com/kanooob/Ocarina
 IssueTracker: https://github.com/kanooob/Ocarina/issues
 
 Builds:
-  - versionName: '211'
-    versionCode: 211
-    commit: v211
+  - versionName: '212'
+    versionCode: 212
+    commit: v212
     subdir: app
     gradle:
       - yes
