@@ -144,7 +144,9 @@ data class Strings(
     val fdroidNoticeTitle: String,
     val fdroidNonFreeNetNotice: String,
     val noTrackersNotice: String,
-    val sourceCodeLabel: String
+    val sourceCodeLabel: String,
+    val appAuthorsLabel: String,
+    val visitGitHub: String
 )
 
 val FrenchStrings = Strings(
@@ -210,7 +212,7 @@ val FrenchStrings = Strings(
     systemPopupInfoDesc = "Ocarina utilise le contrôleur multimédia système officiel d'Android. Il s'affiche sur l'écran de verrouillage et le volet de notifications, et répond aux boutons physiques (casques Bluetooth, boutons au volant, montres connectées).",
     skipControlTitle = "Contrôle du flux au skip",
     skipControlDesc = "Actualiser activement le flux audio lors du saut de morceau pour synchroniser immédiatement la piste et supprimer la latence de tampon.",
-    footerCopyright = "Ocarina © 2026 • Webradio Live Stream • Licence Libre GPLv3",
+    footerCopyright = "Ocarina © 2026 • galaxie_s9 & kanooob • Licence Libre GPLv3",
     reconnectAlertBanner = "La reconnexion automatique a échoué après 5 minutes.",
     cast = "Diffuser sur un appareil",
     castDialogTitle = "Diffuser (DLNA / UPnP)",
@@ -286,7 +288,9 @@ val FrenchStrings = Strings(
     fdroidNoticeTitle = "Mention F-Droid : Anti-Feature NonFreeNet",
     fdroidNonFreeNetNotice = "Ocarina prend en charge l'écoute des directs YouTube et Twitch. Conformément aux règles d'inclusion de F-Droid, ces flux réseau étant propriétaires, l'application est étiquetée avec l'Anti-Feature 'NonFreeNet'.",
     noTrackersNotice = "Logiciel 100% libre et respectueux : aucun traqueur, aucune publicité, zéro SDK propriétaire, zéro dépendance à Google Play Services.",
-    sourceCodeLabel = "Code source libre (GPLv3)"
+    sourceCodeLabel = "Code source libre (GitHub)",
+    appAuthorsLabel = "Développé par galaxie_s9 & kanooob",
+    visitGitHub = "Consulter le projet sur GitHub"
 )
 
 val EnglishStrings = Strings(
@@ -352,7 +356,7 @@ val EnglishStrings = Strings(
     systemPopupInfoDesc = "Ocarina integrates with Android's official System Media Player. It displays in lockscreen and notification drawer, and responds to physical buttons (Bluetooth headphones, steering wheel controls, smartwatches).",
     skipControlTitle = "Stream Reload on Skip",
     skipControlDesc = "Actively reconnect audio stream when skipping to immediately synchronize track and eliminate buffer lag.",
-    footerCopyright = "Ocarina © 2026 • Webradio Live Stream • GPLv3 Licensed",
+    footerCopyright = "Ocarina © 2026 • galaxie_s9 & kanooob • GPLv3 Licensed",
     reconnectAlertBanner = "Auto-reconnect failed after 5 minutes.",
     cast = "Cast to device",
     castDialogTitle = "Cast (DLNA / UPnP)",
@@ -428,7 +432,9 @@ val EnglishStrings = Strings(
     fdroidNoticeTitle = "F-Droid Notice: NonFreeNet Anti-Feature",
     fdroidNonFreeNetNotice = "Ocarina supports live streaming from YouTube and Twitch. In accordance with F-Droid inclusion policies, these proprietary network services trigger the 'NonFreeNet' Anti-Feature flag.",
     noTrackersNotice = "100% Free and Open Source software: zero trackers, zero ads, no proprietary SDKs, no Google Play Services dependency.",
-    sourceCodeLabel = "Open Source Code (GPLv3)"
+    sourceCodeLabel = "Open Source Code (GitHub)",
+    appAuthorsLabel = "Developed by galaxie_s9 & kanooob",
+    visitGitHub = "View project on GitHub"
 )
 
 val LocalAppStrings = compositionLocalOf { FrenchStrings }

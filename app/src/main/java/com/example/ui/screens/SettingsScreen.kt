@@ -979,6 +979,12 @@ fun SettingsScreen(
                                     )
                                 }
                                 Text(
+                                    text = strings.appAuthorsLabel,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
                                     text = "${strings.licenseLabel} : ${strings.licenseValue}",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Medium
@@ -1022,6 +1028,31 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                        }
+
+                        // Bouton Consulter le projet sur GitHub
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/kanooob/Ocarina"))
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    // ignore
+                                }
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("visit_github_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = strings.visitGitHub,
+                                style = MaterialTheme.typography.labelMedium
+                            )
                         }
 
                         // Bouton Consulter la licence GPLv3
@@ -1480,7 +1511,11 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>\n\n" +
+                        text = "Ocarina - Lecteur Webradio Libre pour Android\n" +
+                                "Auteurs : galaxie_s9 & kanooob\n" +
+                                "Dépôt GitHub : https://github.com/kanooob/Ocarina\n\n" +
+                                "Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>\n" +
+                                "Copyright (C) 2026 galaxie_s9 & kanooob\n\n" +
                                 "Ocarina est un logiciel libre : vous pouvez le redistribuer et/ou le modifier selon les termes de la Licence Publique Générale GNU (GPLv3) publiée par la Free Software Foundation.\n\n" +
                                 "Les 4 libertés fondamentales garanties par la GPLv3 :\n" +
                                 "1. La liberté d'exécuter le programme, pour tous les usages.\n" +

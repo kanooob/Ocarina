@@ -5,6 +5,7 @@
   <p><em>Lecteur webradio épuré, robuste et 100% logiciel libre pour Android avec diffusion connectée DLNA / UPnP.</em></p>
 
   [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+  [![GitHub](https://img.shields.io/badge/GitHub-kanooob%2FOcarina-181717?logo=github)](https://github.com/kanooob/Ocarina)
   [![F-Droid](https://img.shields.io/badge/F--Droid-Ready-brightgreen.svg)](#-f-droid--anti-features)
   [![Platform](https://img.shields.io/badge/Platform-Android%2024%2B-green.svg)](#)
   [![No Google Services](https://img.shields.io/badge/Google%20Play%20Services-None-success.svg)](#-vie-privée--zéro-traqueur)
@@ -144,10 +145,18 @@ gradle :app:testDebugUnitTest
 
 ---
 
+## 👥 Auteurs & Développement
+
+- **galaxie_s9**
+- **kanooob** ([github.com/kanooob/Ocarina](https://github.com/kanooob/Ocarina))
+
+---
+
 ## 📄 Licence
 
 Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le modifier selon les termes de la **GNU General Public License** telle que publiée par la Free Software Foundation, soit la **version 3** de la licence, soit (à votre convenance) toute version ultérieure.
 
 Consultez le fichier [LICENSE](LICENSE) pour plus de détails.
 
-Ocarina © 2026.
+Copyright © 2026 **galaxie_s9 & kanooob**. Tous droits réservés sous licence GNU GPLv3.
+

@@ -2,9 +2,9 @@ Categories:
   - Multimedia
   - Internet
 License: GPL-3.0-or-later
-AuthorName: Aidan & Galaxie Team
-SourceCode: https://github.com/aidan64laf/ocarina
-IssueTracker: https://github.com/aidan64laf/ocarina/issues
+AuthorName: galaxie_s9, kanooob
+SourceCode: https://github.com/kanooob/Ocarina
+IssueTracker: https://github.com/kanooob/Ocarina/issues
 
 AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags
@@ -34,7 +34,7 @@ Description: |-
     de flux en direct issus de plateformes réseau propriétaires (YouTube et Twitch).
 
 RepoType: git
-Repo: https://github.com/aidan64laf/ocarina.git
+Repo: https://github.com/kanooob/Ocarina.git
 
 Builds:
   - versionName: '211'
