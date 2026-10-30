@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,9 +26,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -35,9 +40,11 @@ import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
@@ -133,6 +140,7 @@ fun HomeScreen(
     val onlineSearchResults by viewModel.onlineSearchResults.collectAsStateWithLifecycle()
     val isSearchingOnline by viewModel.isSearchingOnline.collectAsStateWithLifecycle()
     val topOnlineStations by viewModel.topOnlineStations.collectAsStateWithLifecycle()
+    val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
 
     var showStationSelectorSheet by remember { mutableStateOf(false) }
     var showDlnaSheet by remember { mutableStateOf(false) }
@@ -142,8 +150,22 @@ fun HomeScreen(
     var selectedSheetTabIndex by remember { mutableStateOf(0) }
     var prefilledStationForDialog by remember { mutableStateOf<RadioStation?>(null) }
 
+    val sheetPagerState = rememberPagerState(initialPage = 0) { 2 }
+
     LaunchedEffect(showStationSelectorSheet) {
         if (showStationSelectorSheet) {
+            if (sheetPagerState.currentPage != selectedSheetTabIndex) {
+                sheetPagerState.scrollToPage(selectedSheetTabIndex)
+            }
+            if (sheetPagerState.currentPage == 1 || selectedSheetTabIndex == 1) {
+                viewModel.loadTopOnlineStations()
+            }
+        }
+    }
+
+    LaunchedEffect(sheetPagerState.currentPage) {
+        selectedSheetTabIndex = sheetPagerState.currentPage
+        if (sheetPagerState.currentPage == 1) {
             viewModel.loadTopOnlineStations()
         }
     }
@@ -897,8 +919,9 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .fillMaxHeight(0.85f)
                     .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp)
+                    .padding(bottom = 24.dp)
             ) {
                 // En-tête avec titre et bouton d'ajout manuel
                 Row(
@@ -968,21 +991,105 @@ fun HomeScreen(
                             }
                         }
                     },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            if (onlineSearchQueryText.isNotBlank()) {
+                                viewModel.recordRecentSearch(onlineSearchQueryText)
+                            }
+                        }
+                    ),
                     shape = RoundedCornerShape(20.dp),
                     singleLine = true
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                // Historique des 3 dernières stations recherchées
+                if (recentSearches.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = strings.recentSearches,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            recentSearches.take(3).forEach { query ->
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            onlineSearchQueryText = query
+                                            viewModel.searchOnlineRadios(query)
+                                            viewModel.recordRecentSearch(query)
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = query,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 80.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Supprimer de l'historique",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier
+                                                .size(12.dp)
+                                                .clip(CircleShape)
+                                                .clickable { viewModel.removeRecentSearch(query) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
-                // Onglets de navigation : Mes radios vs En ligne (RadioBrowser)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Onglets de navigation : Mes radios vs En ligne
                 TabRow(
-                    selectedTabIndex = selectedSheetTabIndex,
+                    selectedTabIndex = sheetPagerState.currentPage,
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.primary
                 ) {
                     Tab(
-                        selected = selectedSheetTabIndex == 0,
-                        onClick = { selectedSheetTabIndex = 0 },
+                        selected = sheetPagerState.currentPage == 0,
+                        onClick = {
+                            coroutineScope.launch {
+                                sheetPagerState.animateScrollToPage(0)
+                            }
+                        },
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -996,9 +1103,11 @@ fun HomeScreen(
                         }
                     )
                     Tab(
-                        selected = selectedSheetTabIndex == 1,
+                        selected = sheetPagerState.currentPage == 1,
                         onClick = {
-                            selectedSheetTabIndex = 1
+                            coroutineScope.launch {
+                                sheetPagerState.animateScrollToPage(1)
+                            }
                             viewModel.loadTopOnlineStations()
                         },
                         text = {
@@ -1015,197 +1124,215 @@ fun HomeScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Affichage du contenu selon l'onglet actif
-                if (selectedSheetTabIndex == 0) {
-                    val filteredStations = remember(stations, onlineSearchQueryText) {
-                        if (onlineSearchQueryText.isBlank()) stations else stations.filter {
-                            it.name.contains(onlineSearchQueryText, ignoreCase = true) ||
-                            it.streamUrl.contains(onlineSearchQueryText, ignoreCase = true)
-                        }
-                    }
-
-                    if (filteredStations.isEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = if (stations.isEmpty()) strings.noStationAvailable else "Aucune station locale ne correspond.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (onlineSearchQueryText.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = {
-                                        selectedSheetTabIndex = 1
-                                        viewModel.searchOnlineRadios(onlineSearchQueryText)
-                                    },
-                                    shape = RoundedCornerShape(18.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Public,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(strings.searchOnlineCta.format(onlineSearchQueryText))
-                                }
+                // Swipe horizontal fluide entre Mes radios et En ligne
+                HorizontalPager(
+                    state = sheetPagerState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) { page ->
+                    if (page == 0) {
+                        val filteredStations = remember(stations, onlineSearchQueryText) {
+                            if (onlineSearchQueryText.isBlank()) stations else stations.filter {
+                                it.name.contains(onlineSearchQueryText, ignoreCase = true) ||
+                                it.streamUrl.contains(onlineSearchQueryText, ignoreCase = true)
                             }
                         }
-                    } else {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(filteredStations, key = { it.id }) { station ->
-                                val isSelected = station.id == activeStation?.id
-                                Card(
-                                    shape = RoundedCornerShape(18.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            viewModel.selectAndPlayStation(station)
-                                            coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
-                                                showStationSelectorSheet = false
-                                            }
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = station.name,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                                                else MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = station.streamUrl,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
 
-                                        if (isSelected) {
-                                            Spacer(modifier = Modifier.width(12.dp))
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = strings.activeStation,
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Onglet En ligne (Service libre RadioBrowser)
-                    val displayRadios = if (onlineSearchQueryText.isNotBlank()) onlineSearchResults else topOnlineStations
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (onlineSearchQueryText.isNotBlank()) {
-                                "${displayRadios.size} radios trouvées (haute qualité)"
-                            } else {
-                                strings.onlinePopularTitle
-                            },
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (isSearchingOnline) {
-                            CircularProgressIndicator(
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (isSearchingOnline && displayRadios.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 36.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                                Spacer(modifier = Modifier.height(12.dp))
+                        if (filteredStations.isEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(vertical = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 Text(
-                                    text = strings.searchingOnline,
+                                    text = if (stations.isEmpty()) strings.noStationAvailable else "Aucune station locale ne correspond.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                if (onlineSearchQueryText.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                sheetPagerState.animateScrollToPage(1)
+                                            }
+                                            viewModel.recordRecentSearch(onlineSearchQueryText)
+                                            viewModel.searchOnlineRadios(onlineSearchQueryText)
+                                        },
+                                        shape = RoundedCornerShape(18.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Public,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(strings.searchOnlineCta.format(onlineSearchQueryText))
+                                    }
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(filteredStations, key = { it.id }) { station ->
+                                    val isSelected = station.id == activeStation?.id
+                                    Card(
+                                        shape = RoundedCornerShape(18.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                viewModel.recordRecentSearch(station.name)
+                                                viewModel.selectAndPlayStation(station)
+                                                coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
+                                                    showStationSelectorSheet = false
+                                                }
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = station.name,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.height(2.dp))
+                                                Text(
+                                                    text = station.streamUrl,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+
+                                            if (isSelected) {
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = strings.activeStation,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
-                    } else if (displayRadios.isEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = if (onlineSearchQueryText.isBlank()) strings.onlineSearchPrompt else strings.onlineSearchEmpty,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                        }
                     } else {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(displayRadios, key = { it.stationUuid }) { radio ->
-                                val isCurrentlyPlaying = (playerState.currentStation?.streamUrl == radio.streamUrl) &&
-                                        (playerState.status is PlaybackStatus.Playing || playerState.status is PlaybackStatus.Buffering)
-                                OnlineRadioItem(
-                                    radio = radio,
-                                    isDlnaActive = isDlnaCasting,
-                                    isCurrentlyPlaying = isCurrentlyPlaying,
-                                    onPlayOrCast = {
-                                        val tempStation = RadioStation(
-                                            name = radio.name,
-                                            streamUrl = radio.streamUrl
-                                        )
-                                        viewModel.playTemporaryStation(tempStation)
+                        val displayRadios = if (onlineSearchQueryText.isNotBlank()) onlineSearchResults else topOnlineStations
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (onlineSearchQueryText.isNotBlank()) {
+                                        "${displayRadios.size} radios trouvées (haute qualité)"
+                                    } else {
+                                        strings.onlinePopularTitle
                                     },
-                                    onAddToList = {
-                                        prefilledStationForDialog = RadioStation(
-                                            name = radio.name,
-                                            streamUrl = radio.streamUrl
-                                        )
-                                        showStationSelectorSheet = false
-                                        showCreateStationDialog = true
-                                    }
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
+                                if (isSearchingOnline) {
+                                    CircularProgressIndicator(
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            if (isSearchingOnline && displayRadios.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(vertical = 36.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = strings.searchingOnline,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            } else if (displayRadios.isEmpty()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(vertical = 32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = if (onlineSearchQueryText.isBlank()) strings.onlineSearchPrompt else strings.onlineSearchEmpty,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(displayRadios, key = { it.stationUuid }) { radio ->
+                                        val isCurrentlyPlaying = (playerState.currentStation?.streamUrl == radio.streamUrl) &&
+                                                (playerState.status is PlaybackStatus.Playing || playerState.status is PlaybackStatus.Buffering)
+                                        OnlineRadioItem(
+                                            radio = radio,
+                                            isDlnaActive = isDlnaCasting,
+                                            isCurrentlyPlaying = isCurrentlyPlaying,
+                                            onPlayOrCast = {
+                                                viewModel.recordRecentSearch(radio.name)
+                                                val tempStation = RadioStation(
+                                                    name = radio.name,
+                                                    streamUrl = radio.streamUrl
+                                                )
+                                                viewModel.playTemporaryStation(tempStation)
+                                            },
+                                            onAddToList = {
+                                                viewModel.recordRecentSearch(radio.name)
+                                                prefilledStationForDialog = RadioStation(
+                                                    name = radio.name,
+                                                    streamUrl = radio.streamUrl
+                                                )
+                                                showStationSelectorSheet = false
+                                                showCreateStationDialog = true
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

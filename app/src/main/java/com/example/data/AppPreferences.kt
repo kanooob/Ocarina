@@ -43,6 +43,9 @@ class AppPreferences(context: Context) {
     private val _totalListeningSeconds = MutableStateFlow(loadTotalListeningSeconds())
     val totalListeningSeconds: StateFlow<Long> = _totalListeningSeconds.asStateFlow()
 
+    private val _recentSearches = MutableStateFlow(loadRecentSearches())
+    val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
+
     private fun loadThemeMode(): ThemeMode {
         val name = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name
         return try {
@@ -115,12 +118,47 @@ class AppPreferences(context: Context) {
         _totalListeningSeconds.value = nonNegative
     }
 
+    private fun loadRecentSearches(): List<String> {
+        val raw = prefs.getString(KEY_RECENT_SEARCHES, "") ?: ""
+        if (raw.isBlank()) return emptyList()
+        return raw.split("|||").map { it.trim() }.filter { it.isNotEmpty() }.take(3)
+    }
+
+    private fun saveRecentSearches(list: List<String>) {
+        val raw = list.take(3).joinToString("|||")
+        prefs.edit().putString(KEY_RECENT_SEARCHES, raw).apply()
+    }
+
+    fun addRecentSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        val current = _recentSearches.value.toMutableList()
+        current.removeAll { it.equals(trimmed, ignoreCase = true) }
+        current.add(0, trimmed)
+        val result = current.take(3)
+        saveRecentSearches(result)
+        _recentSearches.value = result
+    }
+
+    fun removeRecentSearch(query: String) {
+        val current = _recentSearches.value.toMutableList()
+        current.removeAll { it.equals(query, ignoreCase = true) }
+        saveRecentSearches(current)
+        _recentSearches.value = current
+    }
+
+    fun clearRecentSearches() {
+        saveRecentSearches(emptyList())
+        _recentSearches.value = emptyList()
+    }
+
     companion object {
         private const val KEY_THEME_MODE = "key_theme_mode"
         private const val KEY_LANGUAGE = "key_language"
         private const val KEY_SKIP_STREAM_RELOAD = "key_skip_stream_reload"
         private const val KEY_ARTWORK_RESOLUTION = "key_artwork_resolution"
         private const val KEY_TOTAL_LISTENING_SECONDS = "key_total_listening_seconds"
+        private const val KEY_RECENT_SEARCHES = "key_recent_searches"
 
         @Volatile
         private var INSTANCE: AppPreferences? = null

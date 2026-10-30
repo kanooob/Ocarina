@@ -68,8 +68,21 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
     val skipStreamReload: StateFlow<Boolean> = preferences.skipStreamReload
     val artworkResolution: StateFlow<com.example.data.ArtworkResolution> = preferences.artworkResolution
     val totalListeningSeconds: StateFlow<Long> = preferences.totalListeningSeconds
+    val recentSearches: StateFlow<List<String>> = preferences.recentSearches
 
-    // Recherche de webradios en ligne (service libre RadioBrowser)
+    fun recordRecentSearch(query: String) {
+        preferences.addRecentSearch(query)
+    }
+
+    fun removeRecentSearch(query: String) {
+        preferences.removeRecentSearch(query)
+    }
+
+    fun clearRecentSearches() {
+        preferences.clearRecentSearches()
+    }
+
+    // Recherche de webradios en ligne
     private val _onlineSearchQuery = MutableStateFlow("")
     val onlineSearchQuery: StateFlow<String> = _onlineSearchQuery.asStateFlow()
 
@@ -99,6 +112,9 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val results = RadioBrowserService.searchRadios(trimmed)
                 _onlineSearchResults.value = results
+                if (results.isNotEmpty()) {
+                    recordRecentSearch(trimmed)
+                }
             } catch (e: Exception) {
                 _onlineSearchResults.value = emptyList()
             } finally {

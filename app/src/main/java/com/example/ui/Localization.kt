@@ -130,7 +130,11 @@ data class Strings(
     val addToMyStations: String,
     val stationAddedSuccess: String,
     val searchingOnline: String,
-    val searchOnlineCta: String
+    val searchOnlineCta: String,
+    val recentSearches: String,
+    val radioBrowserInfoTitle: String,
+    val radioBrowserInfoDesc: String,
+    val visitRadioBrowser: String
 )
 
 val FrenchStrings = Strings(
@@ -249,7 +253,7 @@ val FrenchStrings = Strings(
     formatDurationDaysHoursMinutes = "%dj %dh %dm",
     searchStationPlaceholder = "Rechercher une radio (nom, genre, pays)…",
     myStationsTab = "Mes radios",
-    onlineRadiosTab = "En ligne (RadioBrowser)",
+    onlineRadiosTab = "En ligne",
     onlineSearchEmpty = "Aucune radio trouvée pour cette recherche.",
     onlineSearchPrompt = "Recherchez parmi plus de 40 000 webradios mondiales libres.",
     onlinePopularTitle = "Radios populaires du moment",
@@ -258,7 +262,11 @@ val FrenchStrings = Strings(
     addToMyStations = "Ajouter",
     stationAddedSuccess = "Station '%s' ajoutée avec succès",
     searchingOnline = "Recherche en ligne…",
-    searchOnlineCta = "Rechercher '%s' en ligne 🌐"
+    searchOnlineCta = "Rechercher '%s' en ligne",
+    recentSearches = "Dernières recherches :",
+    radioBrowserInfoTitle = "Annuaire libre Radio Browser",
+    radioBrowserInfoDesc = "Les stations proposées dans l'onglet 'En ligne' proviennent de l'annuaire communautaire libre Radio Browser (radio-browser.info), regroupant plus de 40 000 stations de radio à travers le monde.",
+    visitRadioBrowser = "Consulter radio-browser.info"
 )
 
 val EnglishStrings = Strings(
@@ -377,7 +385,7 @@ val EnglishStrings = Strings(
     formatDurationDaysHoursMinutes = "%dd %dh %dm",
     searchStationPlaceholder = "Search radio stations (name, genre, country)…",
     myStationsTab = "My Radios",
-    onlineRadiosTab = "Online (RadioBrowser)",
+    onlineRadiosTab = "Online",
     onlineSearchEmpty = "No radio stations found for this search.",
     onlineSearchPrompt = "Search through over 40,000 free online radio stations.",
     onlinePopularTitle = "Popular stations right now",
@@ -386,7 +394,11 @@ val EnglishStrings = Strings(
     addToMyStations = "Add",
     stationAddedSuccess = "Station '%s' added successfully",
     searchingOnline = "Searching online…",
-    searchOnlineCta = "Search '%s' online 🌐"
+    searchOnlineCta = "Search '%s' online",
+    recentSearches = "Recent searches:",
+    radioBrowserInfoTitle = "Radio Browser Open Directory",
+    radioBrowserInfoDesc = "Stations in the 'Online' tab are provided by the free community directory Radio Browser (radio-browser.info), indexing over 40,000 radio stations worldwide.",
+    visitRadioBrowser = "Visit radio-browser.info"
 )
 
 val LocalAppStrings = compositionLocalOf { FrenchStrings }
