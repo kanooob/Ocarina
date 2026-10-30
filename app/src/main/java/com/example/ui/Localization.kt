@@ -134,7 +134,17 @@ data class Strings(
     val recentSearches: String,
     val radioBrowserInfoTitle: String,
     val radioBrowserInfoDesc: String,
-    val visitRadioBrowser: String
+    val visitRadioBrowser: String,
+    val aboutAndLicenseTitle: String,
+    val appVersionLabel: String,
+    val licenseLabel: String,
+    val licenseValue: String,
+    val viewGplLicense: String,
+    val gplLicenseDialogTitle: String,
+    val fdroidNoticeTitle: String,
+    val fdroidNonFreeNetNotice: String,
+    val noTrackersNotice: String,
+    val sourceCodeLabel: String
 )
 
 val FrenchStrings = Strings(
@@ -200,7 +210,7 @@ val FrenchStrings = Strings(
     systemPopupInfoDesc = "Ocarina utilise le contrôleur multimédia système officiel d'Android. Il s'affiche sur l'écran de verrouillage et le volet de notifications, et répond aux boutons physiques (casques Bluetooth, boutons au volant, montres connectées).",
     skipControlTitle = "Contrôle du flux au skip",
     skipControlDesc = "Actualiser activement le flux audio lors du saut de morceau pour synchroniser immédiatement la piste et supprimer la latence de tampon.",
-    footerCopyright = "Ocarina © 2026 • Webradio Live Stream",
+    footerCopyright = "Ocarina © 2026 • Webradio Live Stream • Licence Libre GPLv3",
     reconnectAlertBanner = "La reconnexion automatique a échoué après 5 minutes.",
     cast = "Diffuser sur un appareil",
     castDialogTitle = "Diffuser (DLNA / UPnP)",
@@ -266,7 +276,17 @@ val FrenchStrings = Strings(
     recentSearches = "Dernières recherches :",
     radioBrowserInfoTitle = "Annuaire libre Radio Browser",
     radioBrowserInfoDesc = "Les stations proposées dans l'onglet 'En ligne' proviennent de l'annuaire communautaire libre Radio Browser (radio-browser.info), regroupant plus de 40 000 stations de radio à travers le monde.",
-    visitRadioBrowser = "Consulter radio-browser.info"
+    visitRadioBrowser = "Consulter radio-browser.info",
+    aboutAndLicenseTitle = "À propos & Licence Libre (GPLv3)",
+    appVersionLabel = "Version 2.1.1 (build 211)",
+    licenseLabel = "Licence libre",
+    licenseValue = "GNU General Public License v3.0 (GPL-3.0-or-later)",
+    viewGplLicense = "Consulter le texte de la licence GPLv3",
+    gplLicenseDialogTitle = "GNU General Public License v3.0",
+    fdroidNoticeTitle = "Mention F-Droid : Anti-Feature NonFreeNet",
+    fdroidNonFreeNetNotice = "Ocarina prend en charge l'écoute des directs YouTube et Twitch. Conformément aux règles d'inclusion de F-Droid, ces flux réseau étant propriétaires, l'application est étiquetée avec l'Anti-Feature 'NonFreeNet'.",
+    noTrackersNotice = "Logiciel 100% libre et respectueux : aucun traqueur, aucune publicité, zéro SDK propriétaire, zéro dépendance à Google Play Services.",
+    sourceCodeLabel = "Code source libre (GPLv3)"
 )
 
 val EnglishStrings = Strings(
@@ -332,7 +352,7 @@ val EnglishStrings = Strings(
     systemPopupInfoDesc = "Ocarina integrates with Android's official System Media Player. It displays in lockscreen and notification drawer, and responds to physical buttons (Bluetooth headphones, steering wheel controls, smartwatches).",
     skipControlTitle = "Stream Reload on Skip",
     skipControlDesc = "Actively reconnect audio stream when skipping to immediately synchronize track and eliminate buffer lag.",
-    footerCopyright = "Ocarina © 2026 • Webradio Live Stream",
+    footerCopyright = "Ocarina © 2026 • Webradio Live Stream • GPLv3 Licensed",
     reconnectAlertBanner = "Auto-reconnect failed after 5 minutes.",
     cast = "Cast to device",
     castDialogTitle = "Cast (DLNA / UPnP)",
@@ -398,7 +418,17 @@ val EnglishStrings = Strings(
     recentSearches = "Recent searches:",
     radioBrowserInfoTitle = "Radio Browser Open Directory",
     radioBrowserInfoDesc = "Stations in the 'Online' tab are provided by the free community directory Radio Browser (radio-browser.info), indexing over 40,000 radio stations worldwide.",
-    visitRadioBrowser = "Visit radio-browser.info"
+    visitRadioBrowser = "Visit radio-browser.info",
+    aboutAndLicenseTitle = "About & Open Source License (GPLv3)",
+    appVersionLabel = "Version 2.1.1 (build 211)",
+    licenseLabel = "Open Source License",
+    licenseValue = "GNU General Public License v3.0 (GPL-3.0-or-later)",
+    viewGplLicense = "View full GPLv3 License text",
+    gplLicenseDialogTitle = "GNU General Public License v3.0",
+    fdroidNoticeTitle = "F-Droid Notice: NonFreeNet Anti-Feature",
+    fdroidNonFreeNetNotice = "Ocarina supports live streaming from YouTube and Twitch. In accordance with F-Droid inclusion policies, these proprietary network services trigger the 'NonFreeNet' Anti-Feature flag.",
+    noTrackersNotice = "100% Free and Open Source software: zero trackers, zero ads, no proprietary SDKs, no Google Play Services dependency.",
+    sourceCodeLabel = "Open Source Code (GPLv3)"
 )
 
 val LocalAppStrings = compositionLocalOf { FrenchStrings }

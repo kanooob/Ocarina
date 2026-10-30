@@ -1,0 +1,1 @@
+Free & open source (GPLv3) radio player with direct streaming, widgets and DLNA.

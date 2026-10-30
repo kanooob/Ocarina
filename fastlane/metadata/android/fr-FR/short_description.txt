@@ -1,0 +1,1 @@
+Lecteur webradio libre (GPLv3), streaming direct, métadonnées, widgets et DLNA.

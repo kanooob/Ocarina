@@ -1,0 +1,45 @@
+Categories:
+  - Multimedia
+  - Internet
+License: GPL-3.0-or-later
+AuthorName: Aidan & Galaxie Team
+SourceCode: https://github.com/aidan64laf/ocarina
+IssueTracker: https://github.com/aidan64laf/ocarina/issues
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+
+AntiFeatures:
+  - NonFreeNet
+
+Summary: Lecteur de webradio libre, streaming direct et diffusion DLNA
+Description: |-
+  Ocarina est un lecteur de webradio 100% logiciel libre sous licence GNU GPLv3,
+  conçu pour une écoute musicale fluide et sans distractions sur Android.
+
+  Fonctionnalités :
+  * Diffusion directe des flux Icecast, Shoutcast, HLS (.m3u8), RTSP et DASH
+  * Annuaire libre Radio Browser intégré avec plus de 40 000 stations
+  * Extraction des métadonnées en direct (titre, artiste via Icy-MetaData)
+  * Pochettes d'albums dynamiques haute résolution en temps réel
+  * Diffusion sans fil DLNA / UPnP sur enceintes connectées, TV et amplificateurs
+  * Contrôle physique du volume DLNA depuis les boutons du smartphone
+  * Compteur persistant du temps d'écoute cumulé
+  * Widgets pour écran d'accueil (bouton circulaire et lecteur adaptatif)
+  * Exportation et importation de sauvegardes complètes en JSON
+  * Zéro traqueur, zéro publicité, aucun compte requis, zéro service propriétaire
+
+  Mention Anti-Features :
+  * NonFreeNet : L'application permet la résolution et l'écoute optionnelle
+    de flux en direct issus de plateformes réseau propriétaires (YouTube et Twitch).
+
+RepoType: git
+Repo: https://github.com/aidan64laf/ocarina.git
+
+Builds:
+  - versionName: '211'
+    versionCode: 211
+    commit: v211
+    subdir: app
+    gradle:
+      - yes

@@ -1,0 +1,18 @@
+Ocarina est un lecteur de webradio moderne, épuré et 100% logiciel libre sous licence GNU GPLv3 pour Android.
+
+L'application met l'accent sur la continuité d'écoute, l'absence totale de distractions ou de traqueurs, et une intégration poussée avec l'écosystème Android.
+
+Principales fonctionnalités :
+• Prise en charge des flux audio Icecast, Shoutcast, HLS (.m3u8), RTSP, MP3, AAC, OGG et DASH.
+• Annuaire communautaire Radio Browser intégré avec plus de 40 000 stations libres.
+• Extraction des métadonnées en direct (titre du morceau et nom de l'artiste en temps réel).
+• Pochettes d'albums dynamiques en haute définition.
+• Diffusion sans fil DLNA / UPnP vers vos enceintes Wi-Fi, téléviseurs connectés ou récepteurs de salon, avec contrôle matériel du volume par les touches du téléphone.
+• Widgets pour l'écran d'accueil : bouton d'écoute circulaire et lecteur complet adaptatif teinté avec la couleur dominante de la pochette.
+• Compteur de temps d'écoute cumulé précis et persistant.
+• Sauvegarde et restauration locale en JSON (aucune dépendance au cloud).
+• Reconnexion automatique et tolérance aux coupures réseau.
+• 100% respectueux de votre vie privée : aucun traqueur, aucune publicité, aucune bibliothèque Google Play Services requise.
+
+Anti-Features F-Droid :
+• NonFreeNet : Ocarina inclut la possibilité de résoudre et lire des flux audio en direct depuis YouTube et Twitch. Ces services réseau étant propriétaires, cette fonctionnalité est signalée sous le tag NonFreeNet sur le dépôt F-Droid.

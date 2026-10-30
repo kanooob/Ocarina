@@ -1,0 +1,22 @@
+# F-Droid build configuration file
+# Reference: https://f-droid.org/docs/Build_Metadata_Reference/
+
+AntiFeatures:
+  - NonFreeNet
+
+Categories:
+  - Multimedia
+  - Internet
+
+License: GPL-3.0-or-later
+AuthorName: Aidan & Galaxie Team
+SourceCode: https://github.com/aidan64laf/ocarina
+IssueTracker: https://github.com/aidan64laf/ocarina/issues
+
+Builds:
+  - versionName: '211'
+    versionCode: 211
+    commit: v211
+    subdir: app
+    gradle:
+      - yes
