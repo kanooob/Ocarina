@@ -235,6 +235,18 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun playStationBySearchQuery(query: String) {
+        viewModelScope.launch {
+            val all = repository.getAllStationsSync()
+            val matched = all.firstOrNull { it.name.contains(query, ignoreCase = true) }
+                ?: repository.getSelectedStationSync()
+                ?: all.firstOrNull()
+            if (matched != null) {
+                selectAndPlayStation(matched)
+            }
+        }
+    }
+
     fun pinStationShortcut(station: RadioStation): Boolean {
         return ShortcutHelper.pinStationShortcut(getApplication(), station)
     }

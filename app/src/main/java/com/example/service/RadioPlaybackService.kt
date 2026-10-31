@@ -660,7 +660,8 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                                 onPause()
                                 return true
                             }
-                            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                            android.view.KeyEvent.KEYCODE_HEADSETHOOK -> {
                                 togglePlayback()
                                 return true
                             }
@@ -803,6 +804,24 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                             isSelected = true
                         )
                         playStation(station)
+                    }
+                }
+                Intent.ACTION_MEDIA_BUTTON -> {
+                    val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, android.view.KeyEvent::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                    }
+                    if (keyEvent != null && keyEvent.action == android.view.KeyEvent.ACTION_DOWN) {
+                        when (keyEvent.keyCode) {
+                            android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> onPlay()
+                            android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> onPause()
+                            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                            android.view.KeyEvent.KEYCODE_HEADSETHOOK -> togglePlayback()
+                            android.view.KeyEvent.KEYCODE_MEDIA_STOP -> onStop()
+                            android.view.KeyEvent.KEYCODE_MEDIA_NEXT -> triggerNextSong()
+                        }
                     }
                 }
             }
@@ -1782,7 +1801,32 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
     }
 
     fun triggerNextSong() {
-        val currentStation = _playerState.value.currentStation ?: return
+        val currentStation = _playerState.value.currentStation
+        if (currentStation == null) {
+            serviceScope.launch {
+                val repo = (application as? RadioApp)?.repository
+                val station = repo?.getSelectedStationSync() ?: repo?.getAllStationsSync()?.firstOrNull()
+                if (station != null) {
+                    playStation(station)
+                }
+            }
+            return
+        }
+
+        if (currentStation.changeSongUrl.isBlank()) {
+            serviceScope.launch {
+                val repo = (application as? RadioApp)?.repository
+                val allStations = repo?.getAllStationsSync().orEmpty()
+                if (allStations.size > 1) {
+                    val currentIndex = allStations.indexOfFirst { it.id == currentStation.id }
+                    val nextIndex = if (currentIndex != -1) (currentIndex + 1) % allStations.size else 0
+                    val nextStation = allStations[nextIndex]
+                    repo?.selectStation(nextStation.id)
+                    playStation(nextStation)
+                    return@launch
+                }
+            }
+        }
 
         nextSongJob?.cancel()
         nextSongJob = serviceScope.launch {
@@ -1930,7 +1974,19 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 _playerState.update { it.copy(status = PlaybackStatus.Playing) }
                 updateForegroundNotification()
             } else {
-                _playerState.value.currentStation?.let { playStation(it) }
+                val current = _playerState.value.currentStation
+                if (current != null) {
+                    playStation(current)
+                } else {
+                    serviceScope.launch {
+                        val repo = (application as? RadioApp)?.repository
+                        val fallback = repo?.getSelectedStationSync()
+                            ?: repo?.getAllStationsSync()?.firstOrNull()
+                        if (fallback != null) {
+                            playStation(fallback)
+                        }
+                    }
+                }
             }
         }
     }
@@ -2089,7 +2145,9 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 playStation(station)
             } else {
                 serviceScope.launch {
-                    val fallback = (application as? RadioApp)?.repository?.getSelectedStationSync()
+                    val repo = (application as? RadioApp)?.repository
+                    val fallback = repo?.getSelectedStationSync()
+                        ?: repo?.getAllStationsSync()?.firstOrNull()
                     if (fallback != null) {
                         playStation(fallback)
                     }

@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.service.PlaybackStatus
 import com.example.ui.LocalAppStrings
 import com.example.ui.RadioViewModel
 import com.example.ui.resolveStrings
@@ -295,6 +296,21 @@ class MainActivity : ComponentActivity() {
         val stationId = intent?.getLongExtra(EXTRA_STATION_ID, -1L) ?: -1L
         if (stationId != -1L) {
             viewModel.playStationById(stationId)
+            return
+        }
+
+        val action = intent?.action
+        if (action == android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) {
+            val query = intent.getStringExtra(android.app.SearchManager.QUERY)
+            if (!query.isNullOrBlank()) {
+                viewModel.playStationBySearchQuery(query)
+            } else if (viewModel.playerState.value.status !is PlaybackStatus.Playing) {
+                viewModel.togglePlayPause()
+            }
+        } else if (action == "android.intent.action.MUSIC_PLAYER") {
+            if (viewModel.playerState.value.status !is PlaybackStatus.Playing) {
+                viewModel.togglePlayPause()
+            }
         }
     }
 

@@ -43,3 +43,10 @@ Builds:
     subdir: app
     gradle:
       - yes
+
+  - versionName: '213'
+    versionCode: 213
+    commit: v213
+    subdir: app
+    gradle:
+      - yes

@@ -9,7 +9,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [36])
 class ExampleRobolectricTest {
 
   @Test
@@ -65,5 +65,33 @@ class ExampleRobolectricTest {
     val color = com.example.widget.OcarinaWidgetHelper.extractDominantColor(bitmap)
     // Should return a valid non-zero color
     org.junit.Assert.assertNotEquals(0, color)
+  }
+
+  @Test
+  fun `test version 213 labels`() {
+    val frStrings = com.example.ui.FrenchStrings
+    val enStrings = com.example.ui.EnglishStrings
+    org.junit.Assert.assertTrue(frStrings.appVersionLabel.contains("213"))
+    org.junit.Assert.assertTrue(enStrings.appVersionLabel.contains("213"))
+  }
+
+  @Test
+  fun `test media app intents and audio category`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val pm = context.packageManager
+
+    // Test that MainActivity responds to APP_MUSIC intent
+    val musicIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+      addCategory(android.content.Intent.CATEGORY_APP_MUSIC)
+    }
+    val resolveList = pm.queryIntentActivities(musicIntent, 0)
+    val hasOcarina = resolveList.any { it.activityInfo.packageName == context.packageName }
+    org.junit.Assert.assertTrue("MainActivity should resolve CATEGORY_APP_MUSIC", hasOcarina)
+
+    // Test that MediaButtonReceiver resolves ACTION_MEDIA_BUTTON
+    val mediaButtonIntent = android.content.Intent(android.content.Intent.ACTION_MEDIA_BUTTON)
+    val receivers = pm.queryBroadcastReceivers(mediaButtonIntent, 0)
+    val hasMediaReceiver = receivers.any { it.activityInfo.packageName == context.packageName }
+    org.junit.Assert.assertTrue("MediaButtonReceiver should resolve ACTION_MEDIA_BUTTON", hasMediaReceiver)
   }
 }
