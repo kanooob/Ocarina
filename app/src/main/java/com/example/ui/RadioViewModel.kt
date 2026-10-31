@@ -137,27 +137,6 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playTemporaryStation(station: RadioStation) {
         viewModelScope.launch {
-            if (dlnaManager.isDlnaActive) {
-                val activeDev = dlnaManager.activeDevice.value
-                if (activeDev != null) {
-                    val resolvedUrl = withContext(Dispatchers.IO) {
-                        StreamUrlResolver.resolveStreamUrl(station.streamUrl)
-                    }
-                    RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_PAUSE)
-                    val success = dlnaManager.castStream(
-                        device = activeDev,
-                        streamUrl = resolvedUrl,
-                        title = station.name,
-                        artist = "",
-                        stationName = station.name,
-                        artworkUrl = null
-                    )
-                    if (success) {
-                        RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_SYNC_DLNA)
-                    }
-                    return@launch
-                }
-            }
             RadioPlaybackService.playStation(getApplication(), station)
         }
     }
@@ -225,6 +204,18 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
                 stopPlayback()
             }
             repository.deleteStation(station)
+        }
+    }
+
+    fun moveStation(station: RadioStation, delta: Int) {
+        viewModelScope.launch {
+            repository.moveStation(station.id, delta)
+        }
+    }
+
+    fun moveStationToPosition(station: RadioStation, targetIndex: Int) {
+        viewModelScope.launch {
+            repository.moveStationToPosition(station.id, targetIndex)
         }
     }
 
@@ -333,6 +324,13 @@ class RadioViewModel(application: Application) : AndroidViewModel(application) {
             if (success) {
                 // Synchronize service with active DLNA playback
                 RadioPlaybackService.sendAction(getApplication(), RadioPlaybackService.ACTION_SYNC_DLNA)
+            } else {
+                RadioPlaybackService.notifyDlnaError(
+                    context = getApplication(),
+                    deviceName = device.name,
+                    stationName = station.name,
+                    errorReason = dlnaManager.lastError.value
+                )
             }
             onComplete(success)
         }

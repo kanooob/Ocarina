@@ -31,6 +31,40 @@ class RadioRepository(private val dao: RadioStationDao) {
         }
     }
 
+    suspend fun reorderStations(reorderedStations: List<RadioStation>) {
+        val baseTime = 1000000000000L
+        val updated = reorderedStations.mapIndexed { index, station ->
+            station.copy(createdAt = baseTime + (index * 1000L))
+        }
+        dao.updateStations(updated)
+    }
+
+    suspend fun moveStation(stationId: Long, delta: Int) {
+        val currentList = dao.getAllStationsSync()
+        val currentIndex = currentList.indexOfFirst { it.id == stationId }
+        if (currentIndex == -1) return
+        val targetIndex = (currentIndex + delta).coerceIn(0, currentList.size - 1)
+        if (targetIndex == currentIndex) return
+
+        val mutable = currentList.toMutableList()
+        val item = mutable.removeAt(currentIndex)
+        mutable.add(targetIndex, item)
+        reorderStations(mutable)
+    }
+
+    suspend fun moveStationToPosition(stationId: Long, targetIndex: Int) {
+        val currentList = dao.getAllStationsSync()
+        val currentIndex = currentList.indexOfFirst { it.id == stationId }
+        if (currentIndex == -1) return
+        val clampedTarget = targetIndex.coerceIn(0, currentList.size - 1)
+        if (clampedTarget == currentIndex) return
+
+        val mutable = currentList.toMutableList()
+        val item = mutable.removeAt(currentIndex)
+        mutable.add(clampedTarget, item)
+        reorderStations(mutable)
+    }
+
     suspend fun deleteStation(station: RadioStation) {
         val wasSelected = station.isSelected
         dao.deleteStation(station)

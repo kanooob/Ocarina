@@ -443,7 +443,7 @@ class DlnaManager(private val context: Context) {
                 artworkUrl = artworkUrl
             )
             if (!setUriSuccess) {
-                _lastError.value = "Impossible de configurer le flux sur ${device.name}"
+                _lastError.value = "L'appareil ${device.name} ne peut pas lire ce flux audio (format non supporté)"
                 return@withContext false
             }
 
@@ -460,7 +460,7 @@ class DlnaManager(private val context: Context) {
                 scope.launch { fetchVolume(device) }
                 return@withContext true
             } else {
-                _lastError.value = "Échec du lancement de la lecture sur ${device.name}"
+                _lastError.value = "L'appareil ${device.name} ne peut pas lire ce flux audio"
                 return@withContext false
             }
         } catch (e: Exception) {
@@ -498,7 +498,7 @@ class DlnaManager(private val context: Context) {
                 artworkUrl = artworkUrl
             )
             if (!setUriSuccess) {
-                _lastError.value = "Impossible de configurer le flux sur ${device.name}"
+                _lastError.value = "L'appareil ${device.name} ne peut pas lire ce flux audio (format non supporté)"
                 return@withContext false
             }
 
@@ -524,7 +524,7 @@ class DlnaManager(private val context: Context) {
                     lastStreamArtworkUrl = artworkUrl
                     return@withContext true
                 }
-                _lastError.value = "Échec du lancement de la lecture sur ${device.name}"
+                _lastError.value = "L'appareil ${device.name} ne peut pas lire ce flux audio"
                 return@withContext false
             }
         } catch (e: Exception) {
@@ -780,9 +780,19 @@ class DlnaManager(private val context: Context) {
                 .build()
 
             val response = httpClient.newCall(request).execute()
-            response.isSuccessful
+            if (!response.isSuccessful) {
+                val errorBody = try { response.body?.string().orEmpty() } catch (e: Exception) { "" }
+                Log.w(TAG, "SOAP action $action failed (HTTP ${response.code}) on $controlUrl: $errorBody")
+                if (errorBody.contains("714") || errorBody.contains("MIME", ignoreCase = true) || errorBody.contains("715") || errorBody.contains("format", ignoreCase = true)) {
+                    _lastError.value = "Format audio non supporté par l'appareil"
+                }
+                false
+            } else {
+                true
+            }
         } catch (e: Exception) {
             Log.w(TAG, "SOAP action $action failed on $controlUrl: ${e.message}")
+            _lastError.value = "Appareil injoignable : ${e.message}"
             false
         }
     }

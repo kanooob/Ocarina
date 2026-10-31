@@ -113,4 +113,46 @@ class ExampleUnitTest {
     assertEquals(320, best?.bitrateKbps)
     assertEquals("https://stream.example.com/320", best?.streamUrl)
   }
+
+  @Test
+  fun test_station_reordering_and_moving_logic() {
+    val s1 = com.example.data.RadioStation(id = 1, name = "Station 1", streamUrl = "http://s1", createdAt = 1000L)
+    val s2 = com.example.data.RadioStation(id = 2, name = "Station 2", streamUrl = "http://s2", createdAt = 2000L)
+    val s3 = com.example.data.RadioStation(id = 3, name = "Station 3", streamUrl = "http://s3", createdAt = 3000L)
+
+    val list = mutableListOf(s1, s2, s3)
+    assertEquals("Station 1", list[0].name)
+    assertEquals("Station 2", list[1].name)
+    assertEquals("Station 3", list[2].name)
+
+    // Move Station 2 up by 1 (delta = -1)
+    val idx = list.indexOfFirst { it.id == 2L }
+    val targetIdx = (idx - 1).coerceIn(0, list.size - 1)
+    val item = list.removeAt(idx)
+    list.add(targetIdx, item)
+
+    assertEquals("Station 2", list[0].name)
+    assertEquals("Station 1", list[1].name)
+    assertEquals("Station 3", list[2].name)
+
+    // Move Station 2 to bottom (target = list.size - 1)
+    val idx2 = list.indexOfFirst { it.id == 2L }
+    val item2 = list.removeAt(idx2)
+    list.add(list.size, item2)
+
+    assertEquals("Station 1", list[0].name)
+    assertEquals("Station 3", list[1].name)
+    assertEquals("Station 2", list[2].name)
+
+    // Reassign timestamps sequentially
+    val baseTime = 1000000000000L
+    val updated = list.mapIndexed { index, st ->
+      st.copy(createdAt = baseTime + (index * 1000L))
+    }
+    assertTrue(updated[0].createdAt < updated[1].createdAt)
+    assertTrue(updated[1].createdAt < updated[2].createdAt)
+    assertEquals("Station 1", updated[0].name)
+    assertEquals("Station 3", updated[1].name)
+    assertEquals("Station 2", updated[2].name)
+  }
 }

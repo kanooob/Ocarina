@@ -952,19 +952,33 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                         updateForegroundNotification()
                         startMetadataPolling(resolvedUrl)
                     } else {
+                        val errorReason = dlnaManager.lastError.value ?: "L'appareil connecté ne peut pas lire ce flux audio (format non supporté)."
                         _playerState.update {
                             it.copy(
                                 status = PlaybackStatus.Error("Échec de diffusion sur ${activeDev.name}"),
-                                message = dlnaManager.lastError.value ?: "Échec de connexion DLNA"
+                                message = errorReason
                             )
                         }
+                        notifyDlnaError(
+                            context = this@RadioPlaybackService,
+                            deviceName = activeDev.name,
+                            stationName = effectiveStation.name,
+                            errorReason = errorReason
+                        )
                         updateForegroundNotification()
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to cast station to DLNA: ${e.message}")
+                    val errMsg = e.message ?: "Impossible de diffuser ce flux sur l'appareil"
                     _playerState.update {
-                        it.copy(status = PlaybackStatus.Error("Erreur DLNA: ${e.message}"))
+                        it.copy(status = PlaybackStatus.Error("Erreur DLNA: $errMsg"), message = errMsg)
                     }
+                    notifyDlnaError(
+                        context = this@RadioPlaybackService,
+                        deviceName = activeDev.name,
+                        stationName = effectiveStation.name,
+                        errorReason = errMsg
+                    )
                     updateForegroundNotification()
                 }
             }
@@ -2206,6 +2220,39 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
             } else {
                 context.startService(intent)
             }
+        }
+
+        fun notifyDlnaError(context: Context, deviceName: String, stationName: String, errorReason: String? = null) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager ?: return
+            val openIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                103,
+                openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val title = "Lecture impossible sur $deviceName"
+            val effectiveDesc = if (!errorReason.isNullOrBlank()) {
+                errorReason
+            } else {
+                "L'appareil connecté ne peut pas lire le flux audio de $stationName (format audio non supporté)."
+            }
+
+            val notification = NotificationCompat.Builder(context, RadioApp.ALERT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_ocarina_logo)
+                .setContentTitle(title)
+                .setContentText(effectiveDesc)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(effectiveDesc))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build()
+
+            notificationManager.notify(RadioApp.ALERT_NOTIFICATION_ID, notification)
         }
     }
 }

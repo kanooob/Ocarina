@@ -31,19 +31,30 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
@@ -62,6 +73,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeMute
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -69,6 +81,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +96,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -118,7 +132,7 @@ import com.example.ui.theme.LiveRed
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     viewModel: RadioViewModel,
@@ -149,6 +163,9 @@ fun HomeScreen(
     var onlineSearchQueryText by remember { mutableStateOf("") }
     var selectedSheetTabIndex by remember { mutableStateOf(0) }
     var prefilledStationForDialog by remember { mutableStateOf<RadioStation?>(null) }
+    var stationForActionMenu by remember { mutableStateOf<RadioStation?>(null) }
+    var stationToEditInSheet by remember { mutableStateOf<RadioStation?>(null) }
+    var stationToDeleteInSheet by remember { mutableStateOf<RadioStation?>(null) }
 
     val sheetPagerState = rememberPagerState(initialPage = 0) { 2 }
 
@@ -672,6 +689,65 @@ fun HomeScreen(
                             }
                         }
 
+                        // Alerte explicite si l'appareil connecté (DLNA) ne peut pas lire le flux
+                        AnimatedVisibility(
+                            visible = isDlnaCasting && (playerState.status is PlaybackStatus.Error || dlnaError != null),
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = "Lecture impossible sur ${activeDlnaDevice?.name ?: "l'appareil"}",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                            Text(
+                                                text = dlnaError ?: (playerState.status as? PlaybackStatus.Error)?.message ?: "Format audio non supporté par cet appareil.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Button(
+                                        onClick = { viewModel.disconnectDlna() },
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            contentColor = MaterialTheme.colorScheme.onError
+                                        ),
+                                        modifier = Modifier.height(34.dp)
+                                    ) {
+                                        Text("Sur le tél", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+
                         // Statut de reconnexion auto en cours
                         AnimatedVisibility(
                             visible = playerState.status is PlaybackStatus.Reconnecting && !playerState.reconnectFailed,
@@ -1177,61 +1253,97 @@ fun HomeScreen(
                                 }
                             }
                         } else {
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(filteredStations, key = { it.id }) { station ->
-                                    val isSelected = station.id == activeStation?.id
-                                    Card(
-                                        shape = RoundedCornerShape(18.dp),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                viewModel.recordRecentSearch(station.name)
-                                                viewModel.selectAndPlayStation(station)
-                                                coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
-                                                    showStationSelectorSheet = false
-                                                }
-                                            }
-                                    ) {
-                                        Row(
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Astuce : appui long sur une station pour la modifier, déplacer ou supprimer.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(filteredStations, key = { it.id }) { station ->
+                                        val isSelected = station.id == activeStation?.id
+                                        Card(
+                                            shape = RoundedCornerShape(18.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                            ),
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        viewModel.recordRecentSearch(station.name)
+                                                        viewModel.selectAndPlayStation(station)
+                                                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
+                                                            showStationSelectorSheet = false
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        stationForActionMenu = station
+                                                    }
+                                                )
                                         ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = station.name,
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                                                    else MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Spacer(modifier = Modifier.height(2.dp))
-                                                Text(
-                                                    text = station.streamUrl,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 2,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = station.name,
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                                        else MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = station.streamUrl,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 2,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
 
-                                            if (isSelected) {
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = strings.activeStation,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = strings.activeStation,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                    }
+
+                                                    IconButton(
+                                                        onClick = { stationForActionMenu = station },
+                                                        modifier = Modifier.size(36.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.MoreVert,
+                                                            contentDescription = "Options : ${station.name}",
+                                                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -1320,6 +1432,9 @@ fun HomeScreen(
                                                     streamUrl = radio.streamUrl
                                                 )
                                                 viewModel.playTemporaryStation(tempStation)
+                                                coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
+                                                    showStationSelectorSheet = false
+                                                }
                                             },
                                             onAddToList = {
                                                 viewModel.recordRecentSearch(radio.name)
@@ -1724,6 +1839,317 @@ fun HomeScreen(
             }
         )
     }
+
+    // Menu d'options d'une station (Modifier, Déplacer, Supprimer)
+    stationForActionMenu?.let { actionStation ->
+        val currentStationIndex = stations.indexOfFirst { it.id == actionStation.id }
+        val totalStationsCount = stations.size
+
+        ModalBottomSheet(
+            onDismissRequest = { stationForActionMenu = null },
+            sheetState = rememberModalBottomSheetState(),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // En-tête : Logo, Nom et flux
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Radio,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = actionStation.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = actionStation.streamUrl,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                // Section 1 : DÉPLACER LA STATION DANS LA LISTE
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Déplacer dans la liste",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (currentStationIndex >= 0) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = "Rang ${currentStationIndex + 1} / $totalStationsCount",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.moveStation(actionStation, -1)
+                            },
+                            enabled = currentStationIndex > 0,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Monter")
+                        }
+
+                        FilledTonalButton(
+                            onClick = {
+                                viewModel.moveStation(actionStation, 1)
+                            },
+                            enabled = currentStationIndex < totalStationsCount - 1 && currentStationIndex >= 0,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Descendre")
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.moveStationToPosition(actionStation, 0)
+                            },
+                            enabled = currentStationIndex > 0,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VerticalAlignTop,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("En premier", maxLines = 1)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.moveStationToPosition(actionStation, totalStationsCount - 1)
+                            },
+                            enabled = currentStationIndex < totalStationsCount - 1 && currentStationIndex >= 0,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VerticalAlignBottom,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("En dernier", maxLines = 1)
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                // Section 2 : MODIFIER
+                Surface(
+                    onClick = {
+                        stationToEditInSheet = actionStation
+                        stationForActionMenu = null
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = strings.editStation,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Modifier le nom, le flux ou l'URL de changement",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Section 3 : SUPPRIMER
+                Surface(
+                    onClick = {
+                        stationToDeleteInSheet = actionStation
+                        stationForActionMenu = null
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = strings.deleteStation,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = "Supprimer de la liste 'Mes stations'",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialogue d'édition d'une station existante
+    stationToEditInSheet?.let { st ->
+        StationEditDialog(
+            existingStation = st,
+            onDismiss = { stationToEditInSheet = null },
+            onSave = { name, streamUrl, changeSongUrl ->
+                viewModel.updateStation(
+                    st.copy(
+                        name = name,
+                        streamUrl = streamUrl,
+                        changeSongUrl = changeSongUrl
+                    )
+                )
+                stationToEditInSheet = null
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar("Station '${name}' modifiée avec succès")
+                }
+            },
+            onTestStream = { testUrl ->
+                viewModel.testStreamUrl(testUrl)
+            }
+        )
+    }
+
+    // Dialogue de confirmation de suppression
+    stationToDeleteInSheet?.let { st ->
+        AlertDialog(
+            onDismissRequest = { stationToDeleteInSheet = null },
+            title = {
+                Text(
+                    text = strings.deleteStationConfirmTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = String.format(strings.deleteStationConfirmMsg, st.name),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteStation(st)
+                        stationToDeleteInSheet = null
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Station '${st.name}' supprimée")
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text(strings.delete)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { stationToDeleteInSheet = null }) {
+                    Text(strings.cancel)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -1741,7 +2167,9 @@ fun OnlineRadioItem(
             containerColor = if (isCurrentlyPlaying) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onPlayOrCast)
     ) {
         Row(
             modifier = Modifier

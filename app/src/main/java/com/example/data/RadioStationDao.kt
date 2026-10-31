@@ -42,6 +42,9 @@ interface RadioStationDao {
     @Update
     suspend fun updateStation(station: RadioStation)
 
+    @Update
+    suspend fun updateStations(stations: List<RadioStation>)
+
     @Delete
     suspend fun deleteStation(station: RadioStation)
 
