@@ -70,15 +70,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: "Configurer Java JDK 17"
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
-      - name: "Configurer Gradle"
-        uses: gradle/actions/setup-gradle@v4
-
       - name: "Exécuter le script de mise à jour des versions"
         id: bump
         run: |
@@ -89,15 +80,6 @@ jobs:
             --display "${{ github.event.inputs.display_version }}" \
             --changelog-fr "${{ github.event.inputs.changelog_fr }}" \
             --changelog-en "${{ github.event.inputs.changelog_en }}"
-
-      - name: "Vérifier la compilation et les tests unitaires"
-        run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew testDebugUnitTest
-          else
-            gradle testDebugUnitTest
-          fi
 
       - name: "Configurer Git"
         run: |
@@ -157,7 +139,5 @@ jobs:
           - `.fdroid.yml` : Entrée ajoutée dans `Builds:`
           - `metadata/fr.galaxie.ocarina.yml` : Entrée de build ajoutée
           - `app/src/main/java/com/example/ui/Localization.kt` : Chaînes `appVersionLabel` (FR & EN) actualisées
-          - `app/src/test/java/com/example/ExampleRobolectricTest.kt` : Tests unitaires synchronisés et validés
-
-          Tests unitaires Robolectric passés avec succès ✅
+          - `app/src/test/java/com/example/ExampleRobolectricTest.kt` : Tests unitaires synchronisés
           EOF

@@ -168,7 +168,7 @@ L'action synchronise automatiquement l'ensemble des fichiers :
 - `app/src/main/java/com/example/ui/Localization.kt` (labels de version FR & EN)
 - `app/src/test/java/com/example/ExampleRobolectricTest.kt` (tests unitaires de conformité)
 - `fastlane/metadata/android/` (changelogs par langue)
-Puis valide les tests unitaires et pousse le commit ainsi que le tag Git.
+Puis commite et pousse automatiquement les modifications ainsi que le tag Git.
 
 Vous pouvez également lancer le changement de version manuellement en local :
 ```bash
