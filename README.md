@@ -145,6 +145,38 @@ gradle :app:testDebugUnitTest
 
 ---
 
+## 🏷️ Automatisation du Changement de Version (GitHub Actions)
+
+Pour automatiser la mise à jour du numéro de version à tous les endroits du code en un seul clic :
+
+1. Rendez-vous sur votre dépôt GitHub dans l'onglet **Actions**.
+2. Dans le volet de gauche, sélectionnez le workflow **Changement de Version (Bump Version)**.
+3. Cliquez sur le bouton **Run workflow**.
+4. Vous pouvez laisser les champs sur `auto` (ce qui incrémente automatiquement le `versionCode` de +1, ex: 213 → 214) ou renseigner des valeurs personnalisées :
+   - **version_code** : Code de build Android (ex: `214` ou `auto`)
+   - **version_name** : Nom de version (ex: `214`, `2.1.4` ou `auto`)
+   - **display_version** : Version affichée dans l'app (ex: `2.1.4` ou `auto`)
+   - **create_tag** : Crée et pousse le tag Git (ex: `v214`)
+   - **create_release** : Crée une GitHub Release officielle
+   - **changelog_fr / changelog_en** : Notes de version
+5. Cliquez sur le bouton vert **Run workflow**.
+
+L'action synchronise automatiquement l'ensemble des fichiers :
+- `app/build.gradle.kts` (`versionCode` et `versionName`)
+- `.fdroid.yml` (bloc de build F-Droid)
+- `metadata/fr.galaxie.ocarina.yml` (métadonnées officielles F-Droid)
+- `app/src/main/java/com/example/ui/Localization.kt` (labels de version FR & EN)
+- `app/src/test/java/com/example/ExampleRobolectricTest.kt` (tests unitaires de conformité)
+- `fastlane/metadata/android/` (changelogs par langue)
+Puis valide les tests unitaires et pousse le commit ainsi que le tag Git.
+
+Vous pouvez également lancer le changement de version manuellement en local :
+```bash
+./scripts/bump_version.sh --code auto --display 2.1.4
+```
+
+---
+
 ## 👥 Auteurs & Développement
 
 - **galaxie_s9**

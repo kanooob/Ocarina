@@ -850,6 +850,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 )
             }
             updateForegroundNotification()
+            trySwitchToNextStationOnFailure(station, "URL vide")
             return
         }
 
@@ -866,6 +867,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     )
                 }
                 updateForegroundNotification()
+                trySwitchToNextStationOnFailure(station, "URL invalide")
                 return
             }
         } else {
@@ -1033,6 +1035,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                     )
                 }
                 updateForegroundNotification()
+                trySwitchToNextStationOnFailure(effectiveStation, e.message ?: "Flux indisponible")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to resolve or play station: ${e.message}")
                 handleStreamInterrupted("Flux temporairement indisponible")
@@ -1522,6 +1525,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 )
             }
             updateForegroundNotification()
+            _playerState.value.currentStation?.let { trySwitchToNextStationOnFailure(it, "URL invalide") }
             return
         }
 
@@ -1537,6 +1541,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 )
             }
             updateForegroundNotification()
+            _playerState.value.currentStation?.let { trySwitchToNextStationOnFailure(it, "Format non reconnu") }
             return
         }
 
@@ -1576,6 +1581,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 )
             }
             updateForegroundNotification()
+            _playerState.value.currentStation?.let { trySwitchToNextStationOnFailure(it, "Connexion refusée") }
             return
         }
 
@@ -1596,6 +1602,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 )
             }
             updateForegroundNotification()
+            _playerState.value.currentStation?.let { trySwitchToNextStationOnFailure(it, errorLabel) }
             return
         }
 
@@ -1615,6 +1622,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 )
             }
             updateForegroundNotification()
+            _playerState.value.currentStation?.let { trySwitchToNextStationOnFailure(it, errorMsg) }
         }
     }
 
@@ -1756,6 +1764,7 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 }
                 updateForegroundNotification()
                 showReconnectFailedAlertNotification(station)
+                trySwitchToNextStationOnFailure(station, "Délai de reconnexion dépassé")
             }
         }
     }
@@ -1800,6 +1809,31 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
         reconnectJob = null
     }
 
+    private fun trySwitchToNextStationOnFailure(failedStation: RadioStation, reason: String) {
+        if (!networkMonitor.isConnected()) return
+        serviceScope.launch {
+            val repo = (application as? RadioApp)?.repository ?: return@launch
+            val allStations = repo.getAllStationsSync()
+            if (allStations.size > 1) {
+                val currentIndex = allStations.indexOfFirst { it.id == failedStation.id }
+                val nextIndex = if (currentIndex != -1) (currentIndex + 1) % allStations.size else 0
+                val nextStation = allStations[nextIndex]
+                if (nextStation.id != failedStation.id) {
+                    Log.i(TAG, "Stream playback failed for ${failedStation.name} ($reason). Auto-switching to next station: ${nextStation.name}")
+                    _playerState.update {
+                        it.copy(
+                            message = "${failedStation.name} indisponible ($reason) → Passage automatique à ${nextStation.name}…"
+                        )
+                    }
+                    updateForegroundNotification()
+                    delay(1500)
+                    repo.selectStation(nextStation.id)
+                    playStation(nextStation)
+                }
+            }
+        }
+    }
+
     fun triggerNextSong() {
         val currentStation = _playerState.value.currentStation
         if (currentStation == null) {
@@ -1811,21 +1845,6 @@ class RadioPlaybackService : MediaSessionService(), Player.Listener {
                 }
             }
             return
-        }
-
-        if (currentStation.changeSongUrl.isBlank()) {
-            serviceScope.launch {
-                val repo = (application as? RadioApp)?.repository
-                val allStations = repo?.getAllStationsSync().orEmpty()
-                if (allStations.size > 1) {
-                    val currentIndex = allStations.indexOfFirst { it.id == currentStation.id }
-                    val nextIndex = if (currentIndex != -1) (currentIndex + 1) % allStations.size else 0
-                    val nextStation = allStations[nextIndex]
-                    repo?.selectStation(nextStation.id)
-                    playStation(nextStation)
-                    return@launch
-                }
-            }
         }
 
         nextSongJob?.cancel()
