@@ -68,11 +68,11 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `test version 213 labels`() {
+  fun `test version 214 labels`() {
     val frStrings = com.example.ui.FrenchStrings
     val enStrings = com.example.ui.EnglishStrings
-    org.junit.Assert.assertTrue(frStrings.appVersionLabel.contains("213"))
-    org.junit.Assert.assertTrue(enStrings.appVersionLabel.contains("213"))
+    org.junit.Assert.assertTrue(frStrings.appVersionLabel.contains("214"))
+    org.junit.Assert.assertTrue(enStrings.appVersionLabel.contains("214"))
   }
 
   @Test

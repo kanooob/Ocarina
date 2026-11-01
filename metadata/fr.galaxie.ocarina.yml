@@ -50,3 +50,10 @@ Builds:
     subdir: app
     gradle:
       - yes
+
+  - versionName: '214'
+    versionCode: 214
+    commit: v214
+    subdir: app
+    gradle:
+      - yes

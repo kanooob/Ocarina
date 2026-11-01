@@ -13,8 +13,8 @@ android {
     applicationId = "fr.galaxie.ocarina"
     minSdk = 24
     targetSdk = 36
-    versionCode = 213
-    versionName = "213"
+    versionCode = 214
+    versionName = "214"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
